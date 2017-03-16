@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 import numpy as np
 
 class Encoder(object):
@@ -24,10 +23,32 @@ class Encoder(object):
     operate on just the common 20 amino acids or a richer set with modifications.
     """
 
-    def __init__(self, letters_to_names):
+    def __init__(
+            self,
+            letters_to_names,
+            variable_length=True,
+            add_start_tokens=False,
+            add_stop_tokens=False):
+
         self.letters_to_names = {}
         for (k, v) in letters_to_names.items():
             self.add(k, v)
+
+        self.variable_length = variable_length
+        self.add_start_tokens = add_start_tokens
+        self.add_stop_tokens = add_stop_tokens
+
+        if self.variable_length:
+            assert "-" not in self.letters_to_names
+            self.add("-", "Gap")
+
+        if self.add_start_tokens:
+            assert "^" not in self.letters_to_names
+            self.add("^", "Start")
+
+        if self.add_stop_tokens:
+            assert "$" not in self.letters_to_names
+            self.add("$", "Stop")
 
     def add(self, letter, name):
         assert letter not in self.letters_to_names
@@ -35,7 +56,16 @@ class Encoder(object):
         self.letters_to_names[letter] = name
 
     def letters(self):
-        return list(sorted(self.letters_to_names.keys()))
+        """
+        Return letters in sorted order, special characters should get indices
+        lower than actual amino acids in this order:
+            1) "-"
+            2) "^"
+            3) "$"
+        """
+        return list(sorted(
+            self.letters_to_names.keys(),
+            key=lambda x: (x != "-", x != "^", x != "$", x)))
 
     def names(self):
         return [self.letters_to_names[k] for k in self.letters()]
@@ -62,11 +92,21 @@ class Encoder(object):
             for peptide in peptides
         ]
 
-    def encode_indices(self, peptides, peptide_length):
+    def encode_indices(
+            self,
+            peptides,
+            max_peptide_length=None):
         """
         Encode a set of equal length peptides as a matrix of their
         amino acid indices.
         """
+        if self.variable_length:
+            if max_peptide_length is None:
+                max_peptide_length = max(len(p) for p in peptides)
+        else:
+            offset = 0
+            max_peptide_length = 0
+            if any(len(p))
         X = np.zeros((len(peptides), peptide_length), dtype=int)
         index_dict = self.index_dict()
         for i, peptide in enumerate(peptides):

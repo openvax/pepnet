@@ -18,13 +18,11 @@ from __future__ import (
     absolute_import,
 )
 
-from .encoder import Encoder
-
 ###
 # 20 common amino acids
 ###
 
-amino_acids = {
+amino_acids_dict = {
     "A": "Alanine",
     "R": "Arginine",
     "N": "Asparagine",
@@ -46,24 +44,17 @@ amino_acids = {
     "Y": "Tyrosine",
     "V": "Valine",
 }
-amino_acid_encoder = Encoder(amino_acids)
-amino_acid_letters = amino_acid_encoder.letters()
 
 ###
-# Allow 'X' for amino acids whose identity is not known
+# Including 7 post-translational modifications commonly found by mass spec
 ###
-amino_acids_with_unknown = amino_acids.copy()
-amino_acids_with_unknown["X"] = "Unknown"
-amino_acid_encoder_with_unknown = Encoder(amino_acids_with_unknown)
-amino_acid_letters_with_unknown = amino_acid_encoder_with_unknown.letters()
-
-###
-# In cases where a sequence might have both unknown AAs and a gap
-# we need to distinguish the two characters.
-###
-amino_acids_with_unknown_and_gap = amino_acids_with_unknown.copy()
-amino_acids_with_unknown_and_gap["-"] = "Gap"
-amino_acid_encoder_with_unknown_and_gap = Encoder(amino_acids_with_unknown_and_gap)
-amino_acid_letters_with_unknown_and_gap = \
-    amino_acid_encoder_with_unknown_and_gap.letters()
-
+amino_acids_with_ptms_dict = amino_acids_dict.copy()
+amino_acids_with_ptms_dict.update({
+    "s": "Phospho-Serine",
+    "t": "Phospho-Threonine",
+    "y": "Phospho-Tyrosine",
+    "c": "Cystine",
+    "m": "Methionine sulfoxide",
+    "q": "Pyroglutamate",
+    "n": "Pyroglutamic acid"
+})
