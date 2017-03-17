@@ -38,10 +38,6 @@ class Encoder(object):
         tokens_to_names_dict : dict
             Dictionary mapping each amino acid to its name
 
-        post_translation_modifications : list of str
-            List of post-translational modifications we should ignore by mapping
-            their tokens onto the original unmodified amino acid.
-
         variable_length_sequences : bool
             Do we expect to encode peptides of varying lengths? If so, include
             the gap token "-" in the encoder's alphabet.
@@ -53,6 +49,8 @@ class Encoder(object):
             End each peptide string with "$"
         """
         self._tokens_to_names = OrderedDict()
+        self._index_dict = {}
+
         self.amino_acid_alphabet = amino_acid_alphabet
         self.variable_length_sequences = variable_length_sequences
         self.add_start_tokens = add_start_tokens
@@ -71,10 +69,23 @@ class Encoder(object):
             self._add_token(k, v)
 
     def _add_token(self, token, name):
+        assert len(token) == 1, "Invalid token '%s'" % (token,)
+        assert token not in self._index_dict
         assert token not in self._tokens_to_names
-        assert len(token) == 1
+        self._index_dict[token] = len(self._index_dict)
         self._tokens_to_names[token] = name
 
+    def prepare_sequences(self, original_peptides, max_peptide_length):
+        result_peptides = []
+        prefix = "^" if self.add_start_tokens else ""
+        suffix = "$" if self.add_stop_tokens else ""
+
+        for p in original_peptides:
+            padding = "-" * (max_peptide_length - len(p))
+            result_peptides.append(prefix + p + suffix + padding)
+        return result_peptides
+
+    @property
     def tokens(self):
         """
         Return letters in sorted order, special characters should get indices
@@ -88,11 +99,13 @@ class Encoder(object):
         """
         return list(self._tokens_to_names.keys())
 
-    def names(self):
-        return [self._tokens_to_names[k] for k in self.tokens()]
+    @property
+    def amino_acid_names(self):
+        return [self._tokens_to_names[k] for k in self.tokens]
 
+    @property
     def index_dict(self):
-        return {c: i for (i, c) in enumerate(self.tokens())}
+        return self._index_dict
 
     def __getitem__(self, k):
         return self._tokens_to_names[k]
@@ -102,13 +115,6 @@ class Encoder(object):
 
     def __len__(self):
         return len(self.tokens())
-
-    def index_encoding_list(self, peptides):
-        index_dict = self.index_dict()
-        return [
-            [index_dict[amino_acid] for amino_acid in peptide]
-            for peptide in peptides
-        ]
 
     def _validate_peptides(
             self,
@@ -129,7 +135,15 @@ class Encoder(object):
                 max_peptide_length))
         return peptides
 
-    def encode_indices_array(
+    def encode_index_lists(self, peptides):
+        peptides = self._validate_peptides(peptides)
+        index_dict = self.index_dict
+        return [
+            [index_dict[amino_acid] for amino_acid in peptide]
+            for peptide in peptides
+        ]
+
+    def encode_index_array(
             self,
             peptides,
             max_peptide_length=None):
@@ -137,10 +151,9 @@ class Encoder(object):
         Encode a set of equal length peptides as a matrix of their
         amino acid indices.
         """
-        peptides = self._validate_peptides(peptides, max_peptide_length)
         n_peptides = len(peptides)
         X = np.zeros((n_peptides, max_peptide_length), dtype=int)
-        index_dict = self.index_dict()
+        index_dict = self.index_dict
         for i, peptide in enumerate(peptides):
             for j, amino_acid in enumerate(peptide):
                 # we're expecting the token '-' to have index 0 so it's
@@ -158,7 +171,7 @@ class Encoder(object):
         element that is 1 (and the others are 0).
         """
         shape = (len(peptides), peptide_length, len(self))
-        index_dict = self.index_dict()
+        index_dict = self.index_dict
         X = np.zeros(shape, dtype=bool)
         for i, peptide in enumerate(peptides):
             for j, amino_acid in enumerate(peptide):
@@ -180,7 +193,7 @@ class Encoder(object):
                        and a backward pass over the string
         """
         n_seq = len(sequences)
-        index_dict = self.index_dict()
+        index_dict = self.index_dict
         n_symbols = len(index_dict)
         if bidirectional:
             result = np.zeros((n_seq, 2 * n_symbols), dtype=float)

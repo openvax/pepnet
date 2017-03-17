@@ -21,7 +21,6 @@ from __future__ import (
 ###
 # 20 common amino acids
 ###
-
 amino_acids_dict = {
     "A": "Alanine",
     "R": "Arginine",
@@ -57,7 +56,6 @@ post_translation_modifications_dict = {
     "q": "Pyroglutamate",
     "n": "Pyroglutamic acid"
 }
-
 
 def amino_acids_with_ptms(ptms=[]):
     """
