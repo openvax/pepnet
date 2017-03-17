@@ -48,7 +48,7 @@ amino_acids_dict = {
 ###
 # Including 7 post-translational modifications commonly found by mass spec
 ###
-post_translation_modifications = {
+post_translation_modifications_dict = {
     "s": "Phospho-Serine",
     "t": "Phospho-Threonine",
     "y": "Phospho-Tyrosine",
@@ -57,3 +57,15 @@ post_translation_modifications = {
     "q": "Pyroglutamate",
     "n": "Pyroglutamic acid"
 }
+
+
+def amino_acids_with_ptms(ptms=[]):
+    """
+    Generate a dictionary mapping amino acids to their names, along
+    with a specific set of post-translational modifications.
+    """
+    amino_acids_with_ptms_dict = amino_acids_dict.copy()
+    for ptm in ptms:
+        name = post_translation_modifications_dict[ptm]
+        amino_acids_with_ptms_dict[ptm] = name
+    return amino_acids_with_ptms_dict
