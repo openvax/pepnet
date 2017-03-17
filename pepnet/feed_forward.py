@@ -133,7 +133,7 @@ def make_fixed_length_feedforward_network(
 
 def make_fixed_length_hotshot_network(
         peptide_length=9,
-        n_amino_acids=20,
+        n_symbols=20,
         **kwargs):
     """
     Construct a feed-forward neural network whose inputs are binary vectors
@@ -141,13 +141,13 @@ def make_fixed_length_hotshot_network(
     acid sequence.
     """
     return make_fixed_length_feedforward_network(
-        input_size=peptide_length * n_amino_acids,
+        input_size=peptide_length * n_symbols,
         **kwargs)
 
 
 def make_fixed_length_embedding_network(
         peptide_length=9,
-        n_amino_acids=20,
+        n_symbols=20,
         embedding_output_dim=20,
         **kwargs):
     """
@@ -156,6 +156,6 @@ def make_fixed_length_embedding_network(
     """
     return make_fixed_length_feedforward_network(
         input_size=peptide_length,
-        embedding_input_dim=n_amino_acids,
+        embedding_input_dim=n_symbols,
         embedding_output_dim=embedding_output_dim,
         **kwargs)

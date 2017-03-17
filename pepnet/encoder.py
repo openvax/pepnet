@@ -75,15 +75,28 @@ class Encoder(object):
         self._index_dict[token] = len(self._index_dict)
         self._tokens_to_names[token] = name
 
-    def prepare_sequences(self, original_peptides, max_peptide_length):
-        result_peptides = []
-        prefix = "^" if self.add_start_tokens else ""
-        suffix = "$" if self.add_stop_tokens else ""
+    def prepare_sequences(self, peptides, padded_peptide_length=None):
+        """
+        Add start/stop tokens to each peptide (if required) and
+        if padded_peptide_length is provided then pad each peptide to
+        be the same length using the gap token '-'.
+        """
+        if self.add_start_tokens:
+            peptides = ["^" + p for p in peptides]
+            if padded_peptide_length:
+                padded_peptide_length += 1
 
-        for p in original_peptides:
-            padding = "-" * (max_peptide_length - len(p))
-            result_peptides.append(prefix + p + suffix + padding)
-        return result_peptides
+        if self.add_stop_tokens:
+            peptides = [p + "$" for p in peptides]
+            if padded_peptide_length:
+                padded_peptide_length += 1
+
+        if padded_peptide_length:
+            peptides = [
+                p + "-" * (padded_peptide_length - len(p))
+                for p in peptides
+            ]
+        return peptides
 
     @property
     def tokens(self):
@@ -114,9 +127,9 @@ class Encoder(object):
         self._add_token(k, v)
 
     def __len__(self):
-        return len(self.tokens())
+        return len(self.tokens)
 
-    def _validate_peptides(
+    def _validate_peptide_lengths(
             self,
             peptides,
             max_peptide_length=None):
@@ -133,10 +146,22 @@ class Encoder(object):
         elif any(len(p) != max_peptide_length for p in peptides):
             raise ValueError("Expected all peptides to have length %d" % (
                 max_peptide_length))
-        return peptides
+        return max_peptide_length
+
+    def _validate_and_prepare_peptides(self, peptides, max_peptide_length=None):
+        max_peptide_length = self._validate_peptide_lengths(
+            peptides, max_peptide_length)
+        peptides = self.prepare_sequences(peptides)
+        # did we add start tokens to each sequence?
+        max_peptide_length += self.add_start_tokens
+        # did we add stop tokens to each sequence?
+        max_peptide_length += self.add_stop_tokens
+        return peptides, max_peptide_length
 
     def encode_index_lists(self, peptides):
-        peptides = self._validate_peptides(peptides)
+        # don't try to do length validation since we're allowed to have
+        # multiple peptide lengths
+        peptides = self.prepare_sequences(peptides)
         index_dict = self.index_dict
         return [
             [index_dict[amino_acid] for amino_acid in peptide]
@@ -151,6 +176,8 @@ class Encoder(object):
         Encode a set of equal length peptides as a matrix of their
         amino acid indices.
         """
+        peptides, max_peptide_length = self._validate_and_prepare_peptides(
+            peptides, max_peptide_length)
         n_peptides = len(peptides)
         X = np.zeros((n_peptides, max_peptide_length), dtype=int)
         index_dict = self.index_dict
@@ -164,22 +191,23 @@ class Encoder(object):
     def encode_onehot(
             self,
             peptides,
-            peptide_length):
+            max_peptide_length=None):
         """
         Encode a set of equal length peptides as a binary matrix,
         where each letter is transformed into a length 20 vector with a single
         element that is 1 (and the others are 0).
         """
-        shape = (len(peptides), peptide_length, len(self))
+        peptides, max_peptide_length = self._validate_and_prepare_peptides(
+            peptides, max_peptide_length)
         index_dict = self.index_dict
-        X = np.zeros(shape, dtype=bool)
+        n_symbols = len(index_dict)
+        X = np.zeros((len(peptides), max_peptide_length, n_symbols), dtype=bool)
         for i, peptide in enumerate(peptides):
             for j, amino_acid in enumerate(peptide):
-                k = index_dict[amino_acid]
-                X[i, j, k] = 1
+                X[i, j, index_dict[amino_acid]] = 1
         return X
 
-    def encode_FOFE(self, sequences, alpha=0.7, bidirectional=False,):
+    def encode_FOFE(self, peptides, alpha=0.7, bidirectional=False):
         """
         Implementation of FOFE encoding from:
             A Fixed-Size Encoding Method for Variable-Length Sequences with its
@@ -187,22 +215,30 @@ class Encoder(object):
 
         Parameters
         ----------
-        sequences : list of strings
-        alpha: float, forgetting factor
-        bidirectional: boolean, whether to do both a forward pass
-                       and a backward pass over the string
+        peptides : list of strings
+
+        alpha: float
+            Forgetting factor
+
+        bidirectional: boolean
+            Whether to do both a forward pass and a backward pass over each
+            peptide
         """
-        n_seq = len(sequences)
+        # don't try to do length validation since we're allowed to have
+        # multiple peptide lengths in a FOFE encoding
+        peptides = self.prepare_sequences(peptides)
+        n_peptides = len(peptides)
         index_dict = self.index_dict
         n_symbols = len(index_dict)
         if bidirectional:
-            result = np.zeros((n_seq, 2 * n_symbols), dtype=float)
+            result = np.zeros((n_peptides, 2 * n_symbols), dtype=float)
         else:
-            result = np.zeros((n_seq, n_symbols), dtype=float)
-        for i, seq in enumerate(sequences):
-            l = len(seq)
-            for j, sj in enumerate(seq):
-                result[i, index_dict[sj]] += alpha ** (l - j - 1)
+            result = np.zeros((n_peptides, n_symbols), dtype=float)
+        for i, p in enumerate(peptides):
+            l = len(p)
+            for j, amino_acid in enumerate(p):
+                aa_idx = index_dict[amino_acid]
+                result[i, aa_idx] += alpha ** (l - j - 1)
                 if bidirectional:
-                    result[i, n_symbols + index_dict[sj]] += alpha ** j
+                    result[i, n_symbols + aa_idx] += alpha ** j
         return result
