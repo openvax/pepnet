@@ -13,6 +13,13 @@
 # limitations under the License.
 
 import numpy as np
+from collections import OrderedDict
+
+from .amino_acids import (
+    post_translation_modifications_dict,
+    amino_acids_dict,
+)
+
 
 class Encoder(object):
     """
@@ -22,68 +29,99 @@ class Encoder(object):
     The reason we need a class to contain these mappins is that we might want to
     operate on just the common 20 amino acids or a richer set with modifications.
     """
-
     def __init__(
             self,
-            letters_to_names,
-            variable_length=True,
+            tokens_to_names_dict=amino_acids_dict,
+            ignore_ptm_list=[],
+            encode_ptm_list=[],
+            variable_length_sequences=True,
             add_start_tokens=False,
             add_stop_tokens=False):
+        """
+        Parameters
+        ----------
+        tokens_to_names_dict : dict
+            Dictionary mapping each amino acid to its name
 
-        self.letters_to_names = {}
-        for (k, v) in letters_to_names.items():
-            self.add(k, v)
+        ignore_ptm_list : list of str
+            List of post-translational modifications we should ignore by mapping
+            their tokens onto the original unmodified amino acid.
 
-        self.variable_length = variable_length
+        encode_ptm_list : list of str
+            List of post-translational modifications we should encode.
+
+        variable_length_sequences : bool
+            Do we expect to encode peptides of varying lengths? If so, include
+            the gap token "-" in the encoder's alphabet.
+
+        add_start_tokens : bool
+            Prefix each peptide string with "^"
+
+        add_stop_tokens : bool
+            End each peptide string with "$"
+        """
+        self._tokens_to_names = OrderedDict()
+        self.ignore_ptm_list = ignore_ptm_list
+        self.encode_ptm_list = encode_ptm_list
+        self.variable_length_sequences = variable_length_sequences
         self.add_start_tokens = add_start_tokens
         self.add_stop_tokens = add_stop_tokens
 
-        if self.variable_length:
-            assert "-" not in self.letters_to_names
-            self.add("-", "Gap")
+        if self.variable_length_sequences:
+            self._add_token("-", "Gap")
 
         if self.add_start_tokens:
-            assert "^" not in self.letters_to_names
-            self.add("^", "Start")
+            self._add_token("^", "Start")
 
         if self.add_stop_tokens:
-            assert "$" not in self.letters_to_names
-            self.add("$", "Stop")
+            self._add_token("$", "Stop")
 
-    def add(self, letter, name):
-        assert letter not in self.letters_to_names
-        assert len(letter) == 1
-        self.letters_to_names[letter] = name
+        for (k, v) in tokens_to_names_dict.items():
+            self._add_token(k, v)
 
-    def letters(self):
+        for ptm_token in encode_ptm_list:
+            if ptm_token not in post_translation_modifications_dict:
+                raise ValueError("Unknown modified amino acid '%s'" % (ptm_token,))
+            self._add_token(ptm_token, post_translation_modifications_dict[ptm_token])
+
+        self._uppercase_set = set([])
+        for ptm_token in ignore_ptm_list:
+            if ptm_token not in post_translation_modifications_dict:
+                raise ValueError("Unknown modified amino acid '%s'" % (ptm_token,))
+            self._uppercase_set.add(ptm_token)
+
+    def _add_token(self, token, name):
+        assert token not in self._tokens_to_names
+        assert len(token) == 1
+        self._tokens_to_names[token] = name
+
+    def tokens(self):
         """
         Return letters in sorted order, special characters should get indices
         lower than actual amino acids in this order:
             1) "-"
             2) "^"
             3) "$"
+        Currently we're enforcing this order by having the _tokens_to_names
+        dictionary be an OrderedDict and adding special tokens before amino
+        acids in the __init__ method.
         """
-        return list(sorted(
-            self.letters_to_names.keys(),
-            key=lambda x: (x != "-", x != "^", x != "$", x)))
+        return list(self._tokens_to_names.keys())
 
     def names(self):
-        return [self.letters_to_names[k] for k in self.letters()]
+        return [self._tokens_to_names[k] for k in self.tokens()]
 
     def index_dict(self):
-        return {c: i for (i, c) in enumerate(self.letters())}
-
-    def copy(self):
-        return Encoder(self.letters_to_names)
+        return {c: i for (i, c) in enumerate(self.tokens())}
 
     def __getitem__(self, k):
-        return self.letters_to_names[k]
+        return self._tokens_to_names[k]
 
     def __setitem__(self, k, v):
-        self.add(k, v)
+        self._add_token(k, v)
 
     def __len__(self):
-        return len(self.letters_to_names)
+        return len(self.tokens())
 
     def index_encoding_list(self, peptides):
         index_dict = self.index_dict()
@@ -91,6 +129,26 @@ class Encoder(object):
             [index_dict[amino_acid] for amino_acid in peptide]
             for peptide in peptides
         ]
+
+    def _validate_and_transform_peptides(
+            self,
+            peptides,
+            max_peptide_length=None):
+        if max_peptide_length is None:
+            max_peptide_length = max(len(p) for p in peptides)
+
+        if self.variable_length_sequences:
+            max_observed_length = max(len(p) for p in peptides)
+            if max_observed_length > max_peptide_length:
+                raise ValueError(
+                    "Can't have peptide(s) of length %d and max_peptide_length=%d" % (
+                        max_observed_length,
+                        max_peptide_length))
+        elif any(len(p) != max_peptide_length for p in peptides):
+            raise ValueError("Expected all peptides to have length %d" % (
+                max_peptide_length))
+        # TODO: uppercase PTMs that we're ignoring and make sure no weird
+        # characters are in the given sequences
 
     def encode_indices(
             self,
@@ -100,17 +158,14 @@ class Encoder(object):
         Encode a set of equal length peptides as a matrix of their
         amino acid indices.
         """
-        if self.variable_length:
-            if max_peptide_length is None:
-                max_peptide_length = max(len(p) for p in peptides)
-        else:
-            offset = 0
-            max_peptide_length = 0
-            if any(len(p))
-        X = np.zeros((len(peptides), peptide_length), dtype=int)
+        peptides = self._validate_and_transform_peptides(peptides, max_peptide_length)
+        n_peptides = len(peptides)
+        X = np.zeros((n_peptides, max_peptide_length), dtype=int)
         index_dict = self.index_dict()
         for i, peptide in enumerate(peptides):
             for j, amino_acid in enumerate(peptide):
+                # we're expecting the token '-' to have index 0 so it's
+                # OK to only loop until the end of the given sequence
                 X[i, j] = index_dict[amino_acid]
         return X
 
