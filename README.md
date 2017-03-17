@@ -19,10 +19,12 @@ X_binary = encoder.encode_onehot(["SYF", "GLYCI"], max_peptide_length=9)
 
 ### FOFE encoding of peptides
 
+Implementation of FOFE encoding from [A Fixed-Size Encoding Method for Variable-Length Sequences with its Application to Neural Network Language Models](https://arxiv.org/abs/1505.01504)
+
 ```python
 from pepnet.encoder import Encoder
 encoder = Encoder()
-X_binary = encoder.encode_FOFE(["SYF", "GLYCI"])
+X_binary = encoder.encode_FOFE(["SYF", "GLYCI"], bidirectional=True)
 ```
 
 ## Fixed-length peptide input represented by one-shot binary vectors
