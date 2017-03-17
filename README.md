@@ -3,6 +3,28 @@
 # pepnet
 Neural networks for amino acid sequences
 
+## Index encoding of peptides
+
+```python
+from pepnet.encoder import Encoder
+encoder = Encoder()
+X_index = encoder.encode_index_array(["SYF", "GLYCI"], max_peptide_length=9)
+```
+
+## One-hot encoding of peptides
+from pepnet.encoder import Encoder
+encoder = Encoder()
+X_binary = encoder.encode_onehot(["SYF", "GLYCI"], max_peptide_length=9)
+```
+
+### FOFE encoding of peptides
+
+```python
+from pepnet.encoder import Encoder
+encoder = Encoder()
+X_binary = encoder.encode_FOFE(["SYF", "GLYCI"])
+```
+
 ## Fixed-length peptide input represented by one-shot binary vectors
 
 ```python
@@ -53,4 +75,20 @@ input_dict = {
 }
 Y = np.array([True, False, True, False])
 model.fit(input_dict, Y)
+```
+
+## Convolutional network for variable length sequences
+
+```python
+model = make_variable_length_embedding_convolutional_model(
+    n_symbols=21,
+    max_peptide_length=30,
+    embedding_output_dim=32,
+    n_filters_per_size=32,
+    filter_sizes=[3, 5, 9],
+    n_conv_layers=1,
+    pool_size=3,
+    pool_stride=2,
+    dropout=0.25,
+    conv_dropout=0.1)
 ```
