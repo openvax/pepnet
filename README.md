@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/hammerlab/pepnet.svg?branch=master)](https://travis-ci.org/hammerlab/pepnet)
+
 # pepnet
 Neural networks for amino acid sequences
 
