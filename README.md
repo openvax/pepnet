@@ -5,6 +5,8 @@ Neural networks for amino acid sequences
 
 ## Index encoding of peptides
 
+Represent every amino acid with a number between 1-21 (0 is reserved for padding)
+
 ```python
 from pepnet.encoder import Encoder
 encoder = Encoder()
@@ -12,6 +14,11 @@ X_index = encoder.encode_index_array(["SYF", "GLYCI"], max_peptide_length=9)
 ```
 
 ## One-hot encoding of peptides
+
+Represent every amino acid with a binary vector where only one entry is 1 and
+the rest are 0.
+
+```python
 from pepnet.encoder import Encoder
 encoder = Encoder()
 X_binary = encoder.encode_onehot(["SYF", "GLYCI"], max_peptide_length=9)
