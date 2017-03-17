@@ -86,18 +86,39 @@ Y = np.array([True, False, True, False])
 model.fit(input_dict, Y)
 ```
 
-## Convolutional network for variable length sequences
+## Simple convolutional network with global max and mean pooling
 
 ```python
-model = make_variable_length_embedding_convolutional_model(
-    n_symbols=21,
+cnn_model_small = make_variable_length_embedding_convolutional_model(
     max_peptide_length=30,
-    embedding_output_dim=32,
     n_filters_per_size=32,
-    filter_sizes=[3, 5, 9],
+    filter_sizes=[9],
     n_conv_layers=1,
     pool_size=3,
     pool_stride=2,
     dropout=0.25,
-    conv_dropout=0.1)
+    conv_dropout=0.1,
+    hidden_layer_sizes=[],
+    n_output=1)
 ```
+
+Schematic of the small convolutional model: ![](conv_small.png)
+
+## Multi-layer convolutional network with max pooling
+
+```python
+cnn_model_large = make_variable_length_embedding_convolutional_model(
+    max_peptide_length=30,
+    n_filters_per_size=32,
+    filter_sizes=[3, 5, 9],
+    n_conv_layers=2,
+    pool_size=3,
+    pool_stride=2,
+    dropout=0.25,
+    conv_dropout=0.1,
+    hidden_layer_sizes=[100],
+    n_output=1)
+```
+
+Schematic of the large convolutional model: ![](conv_large.png)
+
