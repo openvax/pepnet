@@ -29,7 +29,7 @@ before_install:
 install:
   - >
       conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
-      numpy scipy nose pandas keras
+      numpy scipy nose pandas keras tensorflow
   - source activate test-environment
   - pip install pypandoc
   - pip install -r requirements.txt
