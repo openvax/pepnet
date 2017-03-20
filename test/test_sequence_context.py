@@ -21,6 +21,6 @@ def test_model_with_fixed_length_context():
         "downstream": X_downstream,
         "peptide": X_peptide
     }
-    model.fit(input_dict, Y, nb_epoch=20)
+    model.fit(input_dict, Y, epochs=20)
     Y_pred = model.predict(input_dict)
     assert (Y == (Y_pred[:, 0] > 0.5)).all(), (Y, Y_pred)

@@ -12,6 +12,7 @@ class MaskedGlobalMaxPooling1D(keras.layers.pooling._GlobalPooling1D):
     supports_masking = True
 
     def call(self, x, mask):
+        mask = K.cast(mask, "float32")
         expanded_mask = K.expand_dims(mask)
         # zero embedded vectors which come from masked characters
         x_masked = x * expanded_mask

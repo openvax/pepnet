@@ -1,6 +1,6 @@
 from keras.layers import (
-    Dense, Embedding, Input, merge, Flatten, Dropout)
-
+    Dense, Embedding, Input, Flatten, Dropout, SpatialDropout1D)
+from keras.layers.merge import concatenate
 from keras.models import Model
 
 from .keras_layers.masked_global_average_pooling import MaskedGlobalAveragePooling1D
@@ -14,7 +14,8 @@ def make_variable_length_model_with_fixed_length_context(
         n_symbols=21,
         embedding_output_dim=32,
         embedding_dropout=0,
-        dropout=0.25,
+        dropout_before_hidden=0,
+        dropout_after_hidden=0.25,
         n_hidden=20,
         hidden_activation="relu",
         optimizer="rmsprop",
@@ -88,36 +89,43 @@ def make_variable_length_model_with_fixed_length_context(
         input_dim=n_symbols + 1,
         output_dim=embedding_output_dim,
         mask_zero=True,
-        name="peptide-embedding",
-        dropout=embedding_dropout)
+        name="peptide-embedding")
     # upstream
     upstream = Input(shape=(n_upstream,), dtype="int32", name="upstream")
     upstream_embedded = peptide_embedding(upstream)
+    if embedding_dropout > 0:
+        upstream_embedded = SpatialDropout1D(embedding_dropout)(upstream_embedded)
 
     # downstream
     downstream = Input(shape=(n_downstream,), dtype="int32", name="downstream")
     downstream_embedded = peptide_embedding(downstream)
+    if embedding_dropout > 0:
+        downstream_embedded = SpatialDropout1D(embedding_dropout)(downstream_embedded)
 
     # peptide
     peptide = Input(shape=(max_peptide_length,), dtype="int32", name="peptide")
-
     peptide_embedded = peptide_embedding(peptide)
+    if embedding_dropout > 0:
+        peptide_embedded = SpatialDropout1D(embedding_dropout)(peptide_embedded)
+
     peptide_max = MaskedGlobalMaxPooling1D()(peptide_embedded)
     peptide_avg = MaskedGlobalAveragePooling1D()(peptide_embedded)
 
-    input_concat = merge([
+    input_concat = concatenate([
         Flatten()(DropMask()(upstream_embedded)),
         Flatten()(DropMask()(downstream_embedded)),
         peptide_avg,
         peptide_max,
-    ], mode="concat")
-    # input_concat = Dropout(input_dropout)(input_concat)
-    hidden = Dense(n_hidden, activation=hidden_activation, name="hidden")(input_concat)
-    hidden = Dropout(dropout)(hidden)
-    output = Dense(n_output, activation=output_activation, name="output")(hidden)
+    ])
+    if dropout_before_hidden:
+        input_concat = Dropout(dropout_before_hidden)(input_concat)
+    hidden = Dense(units=n_hidden, activation=hidden_activation, name="hidden")(input_concat)
+    if dropout_after_hidden:
+        hidden = Dropout(dropout_after_hidden)(hidden)
+    output = Dense(units=n_output, activation=output_activation, name="output")(hidden)
     model = Model(
-        input=[upstream, downstream, peptide],
-        output=output)
+        inputs=[upstream, downstream, peptide],
+        outputs=output)
     model.compile(
         optimizer=optimizer,
         loss=loss,

@@ -12,6 +12,7 @@ class MaskedGlobalAveragePooling1D(keras.layers.pooling._GlobalPooling1D):
     supports_masking = True
 
     def call(self, x, mask):
+        mask = K.cast(mask, "float32")
         expanded_mask = K.expand_dims(mask)
         # zero embedded vectors which come from masked characters
         x_masked = x * expanded_mask
@@ -23,9 +24,8 @@ class MaskedGlobalAveragePooling1D(keras.layers.pooling._GlobalPooling1D):
         # cast the number of non-zero elements to float32 and
         # give it an extra dimension so it can broadcast properly in
         # an elementwise divsion
-        counts_cast = K.expand_dims(K.cast(mask_counts, "float32"))
+        counts_cast = K.expand_dims(mask_counts)
         return x_sums / counts_cast
 
     def compute_mask(self, x, mask):
         return None
-

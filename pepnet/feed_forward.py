@@ -22,6 +22,7 @@ from keras.models import Sequential
 from keras.layers.core import Dense, Activation, Flatten, Dropout
 from keras.layers.embeddings import Embedding
 from keras.layers.normalization import BatchNormalization
+from keras.layers import SpatialDropout1D
 
 def _build_layers(
         model,
@@ -45,9 +46,9 @@ def _build_layers(
         # hidden layer fully connected layer
         model.add(
             Dense(
+                units=dim,
                 input_dim=previous_dim,
-                output_dim=dim,
-                init=init))
+                kernel_initializer=init))
         model.add(Activation(activation))
 
         if batch_normalization:
@@ -58,9 +59,9 @@ def _build_layers(
 
     # add final layer
     model.add(Dense(
+        units=output_size,
         input_dim=layer_sizes[-1],
-        output_dim=output_size,
-        init=init))
+        kernel_initializer=init))
     model.add(Activation(output_activation))
     return model
 
@@ -103,15 +104,17 @@ def make_fixed_length_feedforward_network(
                 input_dim=embedding_input_dim,
                 output_dim=embedding_output_dim,
                 input_length=input_size,
-                weights=[initial_embedding_weights],
-                dropout=embedding_dropout))
+                weights=[initial_embedding_weights]))
         else:
             model.add(Embedding(
                 input_dim=embedding_input_dim,
                 output_dim=embedding_output_dim,
                 input_length=input_size,
-                init=embedding_init_method,
-                dropout=embedding_dropout))
+                embeddings_initializer=embedding_init_method))
+
+        if embedding_dropout:
+            model.add(SpatialDropout1D(embedding_dropout))
+
         model.add(Flatten())
 
         input_size = input_size * embedding_output_dim
