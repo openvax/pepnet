@@ -24,7 +24,7 @@ encoder = Encoder()
 X_binary = encoder.encode_onehot(["SYF", "GLYCI"], max_peptide_length=9)
 ```
 
-### FOFE encoding of peptides
+## FOFE encoding of peptides
 
 Implementation of FOFE encoding from [A Fixed-Size Encoding Method for Variable-Length Sequences with its Application to Neural Network Language Models](https://arxiv.org/abs/1505.01504)
 
