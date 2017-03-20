@@ -29,9 +29,9 @@ before_install:
 install:
   - >
       conda create -q -n test-environment python=$TRAVIS_PYTHON_VERSION
-      numpy scipy nose pandas keras tensorflow theano
+      numpy scipy nose pandas keras theano
   - source activate test-environment
-  - pip install pypandoc pylint
+  - pip install pypandoc pylint tensorflow
   - pip install -r requirements.txt
   - pip install .
   - pip install coveralls
