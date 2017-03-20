@@ -9,6 +9,8 @@ addons:
       # install pandoc for use with pypandoc for converting the README
       # from markdown to RST
       - pandoc
+env:
+  - KERAS_BACKEND=theano
 before_install:
   # Commands below copied from: http://conda.pydata.org/docs/travis.html
   # We do this conditionally because it saves us some downloading if the
