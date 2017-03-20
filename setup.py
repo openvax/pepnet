@@ -64,7 +64,7 @@ if __name__ == '__main__':
         ],
         install_requires=[
             'numpy>=1.7',
-            'keras',
+            'keras>=2.0.0',
         ],
         long_description=readme,
     )
