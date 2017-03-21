@@ -26,6 +26,8 @@ def make_variable_length_embedding_convolutional_model(
         loss="mse",
         n_output=1,
         output_activation="sigmoid",
+        aux_sequence_input_sizes=[],
+        aux_quantiative_input_sizes=[],
         compile_kwargs={}):
     """
     Make a model with a single peptide input which is passed through a
