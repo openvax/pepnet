@@ -38,21 +38,6 @@ class InputBuilder(object):
             value = input_object
         self.value = value
 
-    def copy_with(self, value):
-        """
-        Create copy of this object with updated value
-        """
-        return self.__class__(
-            name=self.name,
-            length=self.length,
-            n_symbols=self.n_symbols,
-            encoding=self.encoding,
-            input_object=self.input_object,
-            value=value)
-
-    def apply(self, layer):
-        return self.copy_with(layer(self.value))
-
     def embedding(self, output_dim, dropout=0, initial_weights=None):
         if initial_weights:
             n_rows, n_cols = initial_weights.shape
@@ -75,11 +60,10 @@ class InputBuilder(object):
                 mask_zero=False,
                 name="%s_embedding" % self.name)
 
-        value = embedding_layer(self.value)
+        self.value = embedding_layer(self.value)
 
         if dropout:
-            value = SpatialDropout1D(dropout)(value)
-        return self.copy_with(value)
+            self.value = SpatialDropout1D(dropout)(self.value)
 
     def conv(self, filter_sizes, output_dim, dropout=0.1):
         """
@@ -113,19 +97,19 @@ class InputBuilder(object):
             convolved = Concatenate()(convolved_list)
         else:
             convolved = convolved_list[0]
-        return self.copy_with(convolved)
+        self.value = convolved
 
     def local_max_pooling(self, size=3, stride=2):
-        return self.apply(MaxPooling1D(pool_size=size, strides=stride))
+        self.value = MaxPooling1D(pool_size=size, strides=stride)(self.value)
 
     def global_max_pooling(self):
-        return self.apply(GlobalMaxPooling1D())
+        self.value = GlobalMaxPooling1D()(self.value)
 
     def global_mean_pooling(self):
-        return self.apply(GlobalAveragePooling1D())
+        self.value = GlobalAveragePooling1D()(self.value)
 
     def global_max_and_mean_pooling(self):
         max_pooled = GlobalMaxPooling1D()(self.value)
         mean_pooled = GlobalAveragePooling1D(self.value)
         concat = Concatenate([max_pooled, mean_pooled])
-        return self.copy_with(concat)
+        self.value = concat
