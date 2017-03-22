@@ -1,5 +1,6 @@
 from .input_builder import InputBuilder
 
+
 class SequenceInput(object):
     def __init__(
             self,
@@ -10,11 +11,59 @@ class SequenceInput(object):
             embedding_dim=32,
             embedding_dropout=0,
             conv_filter_sizes=[],
+            n_conv_layers=1,
             conv_output_dim=16,
             conv_dropout=0.1,
-            n_conv_layers=1,
             pool_size=3,
-            pool_stride=2):
+            pool_stride=2,):
+        """
+        Parameters
+        ----------
+        name : str
+            Name of input sequence
+
+        length : int
+            Maximum length of sequence
+
+        n_symbols : int
+            Number of distinct symbols in sequences, default expects
+            20 amino acids + 1 character for padding ('-')
+
+        encoding : {"index", "onehot"}
+            How are symbols represented: via integer indices or boolean
+            vectors?
+
+        embedding_dim : int
+            How many dimensions in the symbol embedding
+            (only used for index encoding)
+
+        embedding_dropout : float
+            What fraction of symbol representations are randomly set to 0
+            during training?
+
+        conv_filter_sizes : list of int
+            Width of convolutional filters to apply to input vectors
+
+        n_conv_layers : int
+            Number of convolutional layers (with interleaving max pooling)
+            to create
+
+        conv_output_dim : int
+            Number of filters per size of convolution
+
+        conv_dropout : float
+            Fraction of convolutional activations to randomly set to 0 during
+            training
+
+        pool_size : int
+            If using more than one convolutional layer, how many timesteps
+            from a previous layer get combined via maxpooling before the next
+            layer.
+
+        pool_stride : int
+            If using more than one convolutional layer, stride of the max
+            pooling.
+        """
         self.name = name
         self.length = length
         self.encoding = encoding
