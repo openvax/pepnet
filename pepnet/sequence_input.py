@@ -97,4 +97,3 @@ class SequenceInput(object):
                 if i + 1 < self.n_conv_layers:
                     builder.local_max_pooling(size=self.pool_size, stride=self.pool_stride)
         return builder.value
-
