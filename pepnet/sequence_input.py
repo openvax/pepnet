@@ -12,14 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .helpers import conv, embedding, make_sequence_input, local_max_pooling
+from .helpers import (
+    conv, embedding, make_sequence_input, local_max_pooling,
+    global_max_and_mean_pooling, flatten)
+from .encoder import Encoder
 
 class SequenceInput(object):
     def __init__(
             self,
             name,
             length,
-            n_symbols=21,
+            variable_length=False,
+            n_symbols=None,
             encoding="index",
             embedding_dim=32,
             embedding_dropout=0,
@@ -28,7 +32,8 @@ class SequenceInput(object):
             conv_output_dim=16,
             conv_dropout=0.1,
             pool_size=3,
-            pool_stride=2):
+            pool_stride=2,
+            global_pooling=False):
         """
         Parameters
         ----------
@@ -37,6 +42,9 @@ class SequenceInput(object):
 
         length : int
             Maximum length of sequence
+
+        variable_length : bool
+            Do we expect padding '-' characters in the input?
 
         n_symbols : int
             Number of distinct symbols in sequences, default expects
@@ -76,10 +84,22 @@ class SequenceInput(object):
         pool_stride : int
             If using more than one convolutional layer, stride of the max
             pooling.
+
+        global_pooling : bool
+            Pool (mean & max) activations across sequence length
         """
         self.name = name
         self.length = length
         self.encoding = encoding
+        self.variable_length = variable_length
+
+        if not n_symbols:
+            if variable_length:
+                n_symbols = 21
+            else:
+                n_symbols = 20
+
+        self.n_symbols = n_symbols
         self.embedding_dim = embedding_dim
         self.conv_filter_sizes = conv_filter_sizes
         self.conv_dropout = conv_dropout
@@ -87,6 +107,7 @@ class SequenceInput(object):
         self.n_conv_layers = n_conv_layers
         self.pool_size = pool_size
         self.pool_stride = pool_stride
+        self.global_pooling = global_pooling
 
     def build(self):
         input_object = make_sequence_input(
@@ -98,7 +119,10 @@ class SequenceInput(object):
         if self.encoding == "index":
             assert self.embedding_dim > 0, \
                 "Invalid embedding dim: %d" % self.embedding_dim
-            value = embedding(input_object, embedding_dim=self.embedding_dim)
+            value = embedding(
+                input_object,
+                n_symbols=self.n_symbols,
+                output_dim=self.embedding_dim)
         else:
             value = input_object
 
@@ -113,4 +137,18 @@ class SequenceInput(object):
                     value = local_max_pooling(
                         size=self.pool_size,
                         stride=self.pool_stride)
+
+        if self.global_pooling:
+            value = global_max_and_mean_pooling(value)
+
+        if value.ndim > 2:
+            value = flatten(value)
+
         return input_object, value
+
+    def encode(self, peptides):
+        encoder = Encoder(variable_length_sequences=self.variable_length)
+        if self.encoding == "index":
+            return encoder.encode_index_array(peptides, max_peptide_length=self.length)
+        else:
+            return encoder.encode_onehot(peptides, max_peptide_length=self.length)

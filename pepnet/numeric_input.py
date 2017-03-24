@@ -24,7 +24,7 @@ class NumericInput(Numeric):
         input_object = make_numeric_input(
             name=self.name, dim=self.dim, dtype=self.dtype)
         hidden = dense_layers(
-            input_object,
+            value=input_object,
             layer_sizes=self.hidden_layer_sizes,
             activation=self.hidden_activation,
             dropout=self.hidden_dropout,

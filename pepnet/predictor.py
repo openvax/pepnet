@@ -12,8 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
+from keras.models import Model
+
+from .numeric_input import NumericInput
+from .sequence_input import SequenceInput
+from .output import Output
 from .helpers import merge, dense_layers
-from keras import Model
+
 
 class Predictor(object):
     def __init__(
@@ -26,8 +32,17 @@ class Predictor(object):
             hidden_dropout=0.25,
             batch_normalization=False,
             optimizer="rmsprop"):
-        self.inputs = inputs
-        self.outputs = outputs
+        if isinstance(inputs, (NumericInput, SequenceInput)):
+            inputs = [inputs]
+        if isinstance(outputs, (Output,)):
+            outputs = [outputs]
+
+        self.inputs = {i.name: i for i in inputs}
+        self.input_order = [i.name for i in inputs]
+
+        self.outputs = {o.name: o for o in outputs}
+        self.output_order = [o.name for o in outputs]
+
         self.merge_mode = merge_mode
         self.hidden_layer_sizes = hidden_layer_sizes
         self.hidden_activation = hidden_activation
@@ -60,18 +75,77 @@ class Predictor(object):
             output_graph = output_descriptor.build(hidden)
             output_dict[output_name] = output_graph
 
-        return Model(inputs=input_dict, outputs=output_dict)
+        return Model(
+            inputs=[input_dict[name] for name in self.input_order],
+            outputs=[output_dict[name] for name in self.output_order])
 
     def _compile(self, model):
-        loss_dict = {output.name: output.loss for output in self.outputs}
+        loss_dict = {name: self.outputs[name].loss for name in self.output_order}
         model.compile(loss=loss_dict, optimizer=self.optimizer)
 
     def _build_and_compile(self):
-        model = self.build()
+        model = self._build()
         self._compile(model)
         return model
 
+    @property
+    def num_inputs(self):
+        return len(self.input_order)
+
+    @property
+    def num_outputs(self):
+        return len(self.output_order)
+
+    def _prepare_input_dict(self, inputs):
+        if isinstance(inputs, np.ndarray):
+            if self.num_inputs != 1:
+                raise ValueError("Expected %d inputs but got 1" % self.num_inputs)
+            inputs = {self.input_order[0]: inputs}
+        elif isinstance(inputs, list):
+            if self.num_inputs != len(inputs):
+                raise ValueError(
+                    "Expected %d inputs but got %d" % (
+                        self.num_inputs,
+                        len(inputs)))
+        elif not isinstance(inputs, dict):
+            raise ValueError("Expected inputs to list, array, or dict, got %s" % (
+                type(inputs)))
+        return {
+            name: self.inputs[name].encode(inputs[name])
+            for name in self.input_order
+        }
+
+    def _prepare_output_dict(self, outputs, encode=False, decode=False):
+        if isinstance(outputs, np.ndarray):
+            if self.num_outputs != 1:
+                raise ValueError("Expected %d outputs but got 1" % self.num_outputs)
+            outputs = {self.output_order[0]: outputs}
+        elif isinstance(outputs, list):
+            if self.num_outputs != len(outputs):
+                raise ValueError(
+                    "Expected %d outputs but got %d" % (
+                        self.num_outputs,
+                        len(outputs)))
+        elif not isinstance(outputs, dict):
+            raise ValueError("Expected outputs to list, array, or dict, got %s" % (
+                type(outputs)))
+        if encode:
+            outputs = {
+                name: self.outputs[name].encode(outputs[name])
+                for name in self.output_order
+            }
+        if decode:
+            outputs = {
+                name: self.outputs[name].decode(outputs[name])
+                for name in self.output_order
+            }
+        return outputs
+
     def fit(self, inputs, outputs):
-        pass
+        inputs = self._prepare_input_dict(inputs)
+        outputs = self._prepare_output_dict(outputs)
+        self.model.fit(inputs, outputs)
 
-
+    def predict(self, inputs):
+        predictions = self.model.predict(self._prepare_input_dict(inputs))
+        return self._prepare_output_dict(predictions, decode=True)

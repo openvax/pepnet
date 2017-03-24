@@ -1,13 +1,15 @@
 from .numeric_input import NumericInput
-from .numeric_output import NumericOutput
+from .output import Output
 from .sequence_input import SequenceInput
 from .predictor import Predictor
+from .encoder import Encoder
 
 __all__ = [
     "NumericInput",
-    "NumericOutput",
     "SequenceInput",
-    "Predictor"
+    "Output",
+    "Predictor",
+    "Encoder",
 ]
 
 __version__ = "0.0.1"

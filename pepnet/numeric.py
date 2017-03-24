@@ -24,7 +24,8 @@ class Numeric(object):
             hidden_layer_sizes=[],
             hidden_activation="relu",
             hidden_dropout=0,
-            batch_normalization=False):
+            batch_normalization=False,
+            transform=None):
         """
         Parameters
         ----------
@@ -48,6 +49,9 @@ class Numeric(object):
 
         batch_normalization : bool
             Use Batch Normalization after hidden layers
+
+        transform : fn, optional
+            Function to transform elements of numeric input/output
         """
         self.name = name
         self.dim = dim
@@ -56,6 +60,12 @@ class Numeric(object):
         self.hidden_activation = hidden_activation
         self.hidden_dropout = hidden_dropout
         self.batch_normalization = batch_normalization
+        self.transform = transform
 
     def build(self):
         raise NotImplementedError("Numeric cannot be directly instantiated")
+
+    def encode(self, x):
+        if self.transform:
+            return self.transform(x)
+        return x

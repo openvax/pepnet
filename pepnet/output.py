@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .helpers import dense_layers
+from .helpers import dense_layers, dense
 from .numeric import Numeric
 
-class NumericOutput(Numeric):
+class Output(Numeric):
     """
     Input which expects fixed length vector, takes same arguments as
     NumericOutput (defined in base class Numeric).
@@ -29,7 +29,9 @@ class NumericOutput(Numeric):
             hidden_layer_sizes=[],
             hidden_activation="relu",
             hidden_dropout=0,
-            batch_normalization=False):
+            batch_normalization=False,
+            transform=None,
+            inverse_transform=None):
         Numeric.__init__(
             self,
             name=name,
@@ -37,9 +39,11 @@ class NumericOutput(Numeric):
             hidden_layer_sizes=hidden_layer_sizes,
             hidden_activation=hidden_activation,
             hidden_dropout=hidden_dropout,
-            batch_normalization=batch_normalization)
+            batch_normalization=batch_normalization,
+            transform=transform)
         self.activation = activation
         self.loss = loss
+        self.inverse_transform = inverse_transform
 
     def build(self, value):
         hidden = dense_layers(
@@ -48,10 +52,14 @@ class NumericOutput(Numeric):
             activation=self.hidden_activation,
             dropout=self.hidden_dropout,
             batch_normalization=self.batch_normalization)
-        output = dense_layers(
+        output = dense(
             hidden,
-            layer_sizes=[self.dim],
+            dim=self.dim,
             activation=self.activation,
-            dropout=0,
-            batch_normalization=False)
+            name=self.name)
         return output
+
+    def decode(self, x):
+        if self.inverse_transform:
+            return self.inverse_transform(x)
+        return x

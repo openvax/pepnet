@@ -22,7 +22,8 @@ from keras.layers import (
     BatchNormalization,
     Concatenate,
     Multiply,
-    Add
+    Add,
+    Flatten,
 )
 from keras.layers.convolutional import Conv1D
 from keras.layers.pooling import (
@@ -128,18 +129,26 @@ def global_max_and_mean_pooling(value):
     mean_pooled = GlobalAveragePooling1D(value)
     return Concatenate()([max_pooled, mean_pooled])
 
+def dense(value, dim, activation, init="glorot_uniform", name=None):
+    if name:
+        # hidden layer fully connected layer
+        value = Dense(
+            units=dim, kernel_initializer=init, name="%s_dense" % name)(value)
+        value = Activation(activation, name=name)(value)
+    else:
+        value = Dense(units=dim, kernel_initializer=init)(value)
+        value = Activation(activation)(value)
+    return value
+
 def dense_layers(
         value,
-        input_size,
         layer_sizes,
         activation="relu",
         init="glorot_uniform",
         batch_normalization=False,
         dropout=0.0):
     for i, dim in enumerate(layer_sizes):
-        # hidden layer fully connected layer
-        value = Dense(units=dim, kernel_initializer=init)(value)
-        value = Activation(activation)(value)
+        value = dense(value, dim=dim, init=init, activation=activation)
 
         if batch_normalization:
             value = BatchNormalization()(value)
@@ -158,3 +167,6 @@ def merge(values, merge_mode):
         return Add()(values)
     elif merge_mode == "multiply":
         return Multiply()(values)
+
+def flatten(value):
+    return Flatten()(value)
