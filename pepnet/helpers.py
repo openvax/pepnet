@@ -126,7 +126,7 @@ def global_mean_pooling(value):
 
 def global_max_and_mean_pooling(value):
     max_pooled = GlobalMaxPooling1D()(value)
-    mean_pooled = GlobalAveragePooling1D(value)
+    mean_pooled = GlobalAveragePooling1D()(value)
     return Concatenate()([max_pooled, mean_pooled])
 
 def dense(value, dim, activation, init="glorot_uniform", name=None):

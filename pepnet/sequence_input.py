@@ -129,12 +129,14 @@ class SequenceInput(object):
         if self.conv_filter_sizes:
             for i in range(self.n_conv_layers):
                 value = conv(
+                    value,
                     filter_sizes=self.conv_filter_sizes,
                     output_dim=self.conv_output_dim,
                     dropout=self.conv_dropout)
                 # add max pooling for all layers before the last
                 if i + 1 < self.n_conv_layers:
                     value = local_max_pooling(
+                        value,
                         size=self.pool_size,
                         stride=self.pool_stride)
 
