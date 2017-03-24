@@ -12,21 +12,46 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .helpers import dense_layers, make_numeric_input
+from .helpers import dense_layers
 from .numeric import Numeric
 
-class NumericInput(Numeric):
+class NumericOutput(Numeric):
     """
     Input which expects fixed length vector, takes same arguments as
     NumericOutput (defined in base class Numeric).
     """
-    def build(self):
-        input_object = make_numeric_input(
-            name=self.name, dim=self.dim, dtype=self.dtype)
+    def __init__(
+            self,
+            name,
+            dim,
+            activation,
+            loss="mse",
+            hidden_layer_sizes=[],
+            hidden_activation="relu",
+            hidden_dropout=0,
+            batch_normalization=False):
+        Numeric.__init__(
+            self,
+            name=name,
+            dim=dim,
+            hidden_layer_sizes=hidden_layer_sizes,
+            hidden_activation=hidden_activation,
+            hidden_dropout=hidden_dropout,
+            batch_normalization=batch_normalization)
+        self.activation = activation
+        self.loss = loss
+
+    def build(self, value):
         hidden = dense_layers(
-            input_object,
+            value,
             layer_sizes=self.hidden_layer_sizes,
             activation=self.hidden_activation,
             dropout=self.hidden_dropout,
             batch_normalization=self.batch_normalization)
-        return input_object, hidden
+        output = dense_layers(
+            hidden,
+            layer_sizes=[self.dim],
+            activation=self.activation,
+            dropout=0,
+            batch_normalization=False)
+        return output
