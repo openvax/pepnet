@@ -1,5 +1,4 @@
-from .input_builder import InputBuilder
-
+from .helpers import conv, embedding, make_sequence_input, local_max_pooling
 
 class SequenceInput(object):
     def __init__(
@@ -15,7 +14,7 @@ class SequenceInput(object):
             conv_output_dim=16,
             conv_dropout=0.1,
             pool_size=3,
-            pool_stride=2,):
+            pool_stride=2):
         """
         Parameters
         ----------
@@ -76,24 +75,28 @@ class SequenceInput(object):
         self.pool_stride = pool_stride
 
     def build(self):
-        builder = InputBuilder(
+        input_object = make_sequence_input(
+            encoding=self.encoding,
             name=self.name,
             length=self.length,
-            n_symbols=self.n_symbols,
-            encoding=self.encoding)
+            n_symbols=self.n_symbols)
 
         if self.encoding == "index":
             assert self.embedding_dim > 0, \
                 "Invalid embedding dim: %d" % self.embedding_dim
-            builder.embedding(self.embedding_dim)
+            value = embedding(input_object, embedding_dim=self.embedding_dim)
+        else:
+            value = input_object
 
         if self.conv_filter_sizes:
             for i in range(self.n_conv_layers):
-                builder.conv(
+                value = conv(
                     filter_sizes=self.conv_filter_sizes,
                     output_dim=self.conv_output_dim,
                     dropout=self.conv_dropout)
                 # add max pooling for all layers before the last
                 if i + 1 < self.n_conv_layers:
-                    builder.local_max_pooling(size=self.pool_size, stride=self.pool_stride)
-        return builder.value
+                    value = local_max_pooling(
+                        size=self.pool_size,
+                        stride=self.pool_stride)
+        return input_object, value
