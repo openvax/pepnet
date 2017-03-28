@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from .helpers import (
-    conv, embedding, make_sequence_input, local_max_pooling,
+    aligned_convolutions, embedding, make_sequence_input, local_max_pooling,
     global_max_and_mean_pooling, flatten)
 from .encoder import Encoder
 
@@ -128,7 +128,7 @@ class SequenceInput(object):
 
         if self.conv_filter_sizes:
             for i in range(self.n_conv_layers):
-                value = conv(
+                value = aligned_convolutions(
                     value,
                     filter_sizes=self.conv_filter_sizes,
                     output_dim=self.conv_output_dim,
@@ -151,6 +151,7 @@ class SequenceInput(object):
     def encode(self, peptides):
         encoder = Encoder(variable_length_sequences=self.variable_length)
         if self.encoding == "index":
-            return encoder.encode_index_array(peptides, max_peptide_length=self.length)
+            return encoder.encode_index_array(
+                peptides, max_peptide_length=self.length)
         else:
             return encoder.encode_onehot(peptides, max_peptide_length=self.length)

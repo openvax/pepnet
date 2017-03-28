@@ -54,6 +54,21 @@ def make_sequence_input(name, length, n_symbols, encoding):
 def make_numeric_input(name, dim, dtype):
     return Input(name=name, shape=(dim,), dtype=dtype)
 
+
+def merge(values, merge_mode):
+    assert merge_mode in {"concat", "add", "multiply"}
+    if len(values) == 1:
+        return values[0]
+    elif merge_mode == "concat":
+        return Concatenate()(values)
+    elif merge_mode == "add":
+        return Add()(values)
+    elif merge_mode == "multiply":
+        return Multiply()(values)
+
+def flatten(value):
+    return Flatten()(value)
+
 def embedding(value, n_symbols, output_dim, dropout=0, initial_weights=None):
     if initial_weights:
         n_rows, n_cols = initial_weights.shape
@@ -81,8 +96,24 @@ def embedding(value, n_symbols, output_dim, dropout=0, initial_weights=None):
 
     return value
 
-def conv(value, filter_sizes, output_dim, dropout=0.1):
+def conv(value, filter_size, output_dim, dropout=0.0, padding="valid"):
     """
+    Perform a single scale of convolution and optionally add spatial dropout.
+    """
+    conv_layer = Conv1D(
+            filters=output_dim,
+            kernel_size=filter_size,
+            padding=padding)
+    convolved = conv_layer(value)
+    if dropout:
+        # random drop some of the convolutional filters
+        convolved = SpatialDropout1D(dropout)(convolved)
+    return convolved
+
+def aligned_convolutions(value, filter_sizes, output_dim, dropout=0.0):
+    """
+    Perform convolutions at multiple scales and concatenate their outputs.
+
     Parameters
     ----------
     filter_sizes : int or list of int
@@ -99,20 +130,13 @@ def conv(value, filter_sizes, output_dim, dropout=0.1):
 
     convolved_list = []
     for size in filter_sizes:
-        conv_layer = Conv1D(
-            filters=output_dim,
-            kernel_size=size,
-            padding="same")
-        convolved = conv_layer(value)
-        if dropout:
-            # random drop some of the convolutional activations
-            convolved = Dropout(dropout)(convolved)
-
-        convolved_list.append(convolved)
-    if len(convolved_list) > 1:
-        convolved = Concatenate()(convolved_list)
-    else:
-        convolved = convolved_list[0]
+        convolved_list.append(conv(
+            value=value,
+            filter_size=size,
+            output_dim=output_dim,
+            dropout=dropout,
+            padding="same"))
+    convolved = merge(convolved_list, "concat")
     return convolved
 
 def local_max_pooling(value, size=3, stride=2):
@@ -125,9 +149,9 @@ def global_mean_pooling(value):
     return GlobalAveragePooling1D()(value)
 
 def global_max_and_mean_pooling(value):
-    max_pooled = GlobalMaxPooling1D()(value)
-    mean_pooled = GlobalAveragePooling1D()(value)
-    return Concatenate()([max_pooled, mean_pooled])
+    return merge([
+        global_max_pooling(value),
+        global_mean_pooling(value)], "concat")
 
 def dense(value, dim, activation, init="glorot_uniform", name=None):
     if name:
@@ -157,16 +181,3 @@ def dense_layers(
             value = Dropout(dropout)(value)
     return value
 
-def merge(values, merge_mode):
-    assert merge_mode in {"concat", "add", "multiply"}
-    if len(values) == 1:
-        return values[0]
-    elif merge_mode == "concat":
-        return Concatenate()(values)
-    elif merge_mode == "add":
-        return Add()(values)
-    elif merge_mode == "multiply":
-        return Multiply()(values)
-
-def flatten(value):
-    return Flatten()(value)

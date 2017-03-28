@@ -32,8 +32,10 @@ class Predictor(object):
             hidden_dropout=0.25,
             batch_normalization=False,
             optimizer="rmsprop"):
+
         if isinstance(inputs, (NumericInput, SequenceInput)):
             inputs = [inputs]
+
         if isinstance(outputs, (Output,)):
             outputs = [outputs]
 
@@ -50,6 +52,36 @@ class Predictor(object):
         self.batch_normalization = batch_normalization
         self.optimizer = optimizer
         self.model = self._build_and_compile()
+
+    @property
+    def use_input_dict(self):
+        if self.num_inputs == 1:
+            input_name = self.input_order[0]
+            # if our single input doesn't have a name then don't try to
+            # pass a dict to Keras
+            return (input_name is None or len(input_name) == 0)
+        else:
+            if any(
+                    (name is None or len(name) == 0)
+                    for name in self.input_order):
+                raise ValueError("Predictor must have names for all %d inputs" % (
+                    self.num_inputs))
+            return True
+
+    @property
+    def use_output_dict(self):
+        if self.num_outputs == 1:
+            output_name = self.output_order[0]
+            # if our single input doesn't have a name then don't try to
+            # pass a dict to Keras
+            return (output_name is None or len(output_name) == 0)
+        else:
+            if any(
+                    (name is None or len(name) == 0)
+                    for name in self.output_order):
+                raise ValueError("Predictor must have names for all %d inputs" % (
+                    self.num_outputs))
+            return True
 
     def _build(self):
         input_dict = {}
@@ -96,36 +128,33 @@ class Predictor(object):
     def num_outputs(self):
         return len(self.output_order)
 
-    def _prepare_input_dict(self, inputs):
-        if isinstance(inputs, np.ndarray):
+    def _prepare_inputs(self, inputs):
+        """
+        Returns dictionary of input name -> input value if use_input_dict is
+        True else, returns just encoded representation of single input.
+        """
+        if isinstance(inputs, (list, np.ndarray)):
             if self.num_inputs != 1:
                 raise ValueError("Expected %d inputs but got 1" % self.num_inputs)
             inputs = {self.input_order[0]: inputs}
-        elif isinstance(inputs, list):
-            if self.num_inputs != len(inputs):
-                raise ValueError(
-                    "Expected %d inputs but got %d" % (
-                        self.num_inputs,
-                        len(inputs)))
         elif not isinstance(inputs, dict):
-            raise ValueError("Expected inputs to list, array, or dict, got %s" % (
-                type(inputs)))
-        return {
+            raise TypeError(
+                "Expected inputs to be list, array, or dict, got %s" % (
+                    type(inputs)))
+        encoded_inputs = {
             name: self.inputs[name].encode(inputs[name])
             for name in self.input_order
         }
+        if self.use_input_dict:
+            return encoded_inputs
+        else:
+            return list(encoded_inputs.values())[0]
 
-    def _prepare_output_dict(self, outputs, encode=False, decode=False):
-        if isinstance(outputs, np.ndarray):
+    def _prepare_outputs(self, outputs, encode=False, decode=False):
+        if isinstance(outputs, (list, np.ndarray)):
             if self.num_outputs != 1:
                 raise ValueError("Expected %d outputs but got 1" % self.num_outputs)
             outputs = {self.output_order[0]: outputs}
-        elif isinstance(outputs, list):
-            if self.num_outputs != len(outputs):
-                raise ValueError(
-                    "Expected %d outputs but got %d" % (
-                        self.num_outputs,
-                        len(outputs)))
         elif not isinstance(outputs, dict):
             raise ValueError("Expected outputs to list, array, or dict, got %s" % (
                 type(outputs)))
@@ -139,13 +168,20 @@ class Predictor(object):
                 name: self.outputs[name].decode(outputs[name])
                 for name in self.output_order
             }
-        return outputs
+        if self.use_output_dict:
+            return outputs
+        else:
+            return list(outputs.values())[0]
 
-    def fit(self, inputs, outputs):
-        inputs = self._prepare_input_dict(inputs)
-        outputs = self._prepare_output_dict(outputs)
-        self.model.fit(inputs, outputs)
+    def fit(self, inputs, outputs, batch_size=32, epochs=100):
+        inputs = self._prepare_inputs(inputs)
+        outputs = self._prepare_outputs(outputs)
+        self.model.fit(
+            inputs,
+            outputs,
+            batch_size=batch_size,
+            epochs=epochs)
 
     def predict(self, inputs):
-        predictions = self.model.predict(self._prepare_input_dict(inputs))
-        return self._prepare_output_dict(predictions, decode=True)
+        predictions = self.model.predict(self._prepare_inputs(inputs))
+        return self._prepare_outputs(predictions, decode=True)
