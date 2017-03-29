@@ -22,9 +22,9 @@ class Output(Numeric):
     """
     def __init__(
             self,
-            name,
             dim,
             activation,
+            name=None,
             loss="mse",
             hidden_layer_sizes=[],
             hidden_activation="relu",

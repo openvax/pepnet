@@ -18,8 +18,8 @@ class Numeric(object):
     """
     def __init__(
             self,
-            name,
             dim,
+            name=None,
             dtype="float32",
             hidden_layer_sizes=[],
             hidden_activation="relu",
@@ -29,11 +29,11 @@ class Numeric(object):
         """
         Parameters
         ----------
-        name : str
-            Name of input sequence
-
         dim : int
             Number of input dimensions
+
+        name : str
+            Name of input sequence
 
         dtype : str
             Most common option is "float32" but might also be "int32"
