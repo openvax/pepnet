@@ -59,7 +59,7 @@ class Predictor(object):
             input_name = self.input_order[0]
             # if our single input doesn't have a name then don't try to
             # pass a dict to Keras
-            return (input_name is None or len(input_name) == 0)
+            return (input_name is not None) and (len(input_name) > 0)
         else:
             if any(
                     (name is None or len(name) == 0)
@@ -74,7 +74,7 @@ class Predictor(object):
             output_name = self.output_order[0]
             # if our single input doesn't have a name then don't try to
             # pass a dict to Keras
-            return (output_name is None or len(output_name) == 0)
+            return (output_name is not None) and (len(output_name) > 0)
         else:
             if any(
                     (name is None or len(name) == 0)
