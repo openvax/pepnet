@@ -17,8 +17,7 @@ from .numeric import Numeric
 
 class Output(Numeric):
     """
-    Input which expects fixed length vector, takes same arguments as
-    NumericOutput (defined in base class Numeric).
+    Numeric output for neural network.
     """
     def __init__(
             self,

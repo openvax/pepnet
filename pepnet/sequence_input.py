@@ -20,8 +20,8 @@ from .encoder import Encoder
 class SequenceInput(object):
     def __init__(
             self,
-            name,
             length,
+            name=None,
             variable_length=False,
             n_symbols=None,
             encoding="index",
@@ -37,11 +37,11 @@ class SequenceInput(object):
         """
         Parameters
         ----------
-        name : str
-            Name of input sequence
-
         length : int
             Maximum length of sequence
+
+        name : str
+            Name of input sequence
 
         variable_length : bool
             Do we expect padding '-' characters in the input?

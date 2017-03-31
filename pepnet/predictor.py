@@ -42,6 +42,8 @@ class Predictor(object):
         self.inputs = {i.name: i for i in inputs}
         self.input_order = [i.name for i in inputs]
 
+        if len(outputs) > 1 and any(not o.name for o in outputs):
+            raise ValueError("All outputs must have names")
         self.outputs = {o.name: o for o in outputs}
         self.output_order = [o.name for o in outputs]
 
@@ -79,9 +81,23 @@ class Predictor(object):
             if any(
                     (name is None or len(name) == 0)
                     for name in self.output_order):
-                raise ValueError("Predictor must have names for all %d inputs" % (
-                    self.num_outputs))
+                raise ValueError(
+                        "Predictor must have names for all %d outputs" % (
+                            self.num_outputs))
             return True
+
+    def _get_single_output(self):
+        """
+        When use_output_dict is False then we know that there's only one
+        output and we can use it without knowing its name.
+        """
+        outputs = list(self.outputs.values())
+        if len(outputs) == 0:
+            raise ValueError("Expected at least one output")
+        elif len(outputs) > 1:
+            raise ValueError("Expected only one output but got %d" % (
+                len(outputs)))
+        return outputs[0]
 
     def _build(self):
         input_dict = {}
@@ -112,8 +128,13 @@ class Predictor(object):
             outputs=[output_dict[name] for name in self.output_order])
 
     def _compile(self, model):
-        loss_dict = {name: self.outputs[name].loss for name in self.output_order}
-        model.compile(loss=loss_dict, optimizer=self.optimizer)
+        if self.use_output_dict:
+            loss = {
+                name: self.outputs[name].loss for name in self.output_order
+            }
+        else:
+            loss = self._get_single_output().loss
+        model.compile(loss=loss, optimizer=self.optimizer)
 
     def _build_and_compile(self):
         model = self._build()
