@@ -3,7 +3,24 @@
 # pepnet
 Neural networks for amino acid sequences
 
-## Index encoding of peptides
+## Predictor API
+
+Sequence and model construction can both be handled for you by pepnet's
+`Predictor`:
+
+```python
+Predictor(
+    inputs=[
+        SequenceInput(length=4, name="x1", variable_length=True),
+        NumericInput(dim=30, name="x2")],
+    outputs=[Output(name="y", dim=1, activation="sigmoid")],
+    hidden_layer_sizes=[30],
+    hidden_activation="relu")
+predictor.fit({"x1": sequences, "x2": vectors}, "y": y)
+y = predictor.predict({"x1": other_sequences, "x2": other_vectors)["y"]
+```
+
+## Manual index encoding of peptides
 
 Represent every amino acid with a number between 1-21 (0 is reserved for padding)
 
@@ -13,7 +30,7 @@ encoder = Encoder()
 X_index = encoder.encode_index_array(["SYF", "GLYCI"], max_peptide_length=9)
 ```
 
-## One-hot encoding of peptides
+## Manual one-hot encoding of peptides
 
 Represent every amino acid with a binary vector where only one entry is 1 and
 the rest are 0.
