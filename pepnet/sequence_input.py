@@ -173,8 +173,9 @@ class SequenceInput(object):
                         size=self.pool_size,
                         stride=self.pool_stride)
 
-        if self.rnn_layer_sizes:
+        if len(self.rnn_layer_sizes) > 0:
             value = recurrent_layers(
+                value=value,
                 layer_sizes=self.rnn_layer_sizes,
                 rnn_type=self.rnn_type,
                 recurrent_dropout=self.rnn_dropout,
@@ -194,4 +195,5 @@ class SequenceInput(object):
             return encoder.encode_index_array(
                 peptides, max_peptide_length=self.length)
         else:
-            return encoder.encode_onehot(peptides, max_peptide_length=self.length)
+            return encoder.encode_onehot(
+                peptides, max_peptide_length=self.length)
