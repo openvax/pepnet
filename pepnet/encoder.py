@@ -179,14 +179,14 @@ class Encoder(object):
         peptides, max_peptide_length = self._validate_and_prepare_peptides(
             peptides, max_peptide_length)
         n_peptides = len(peptides)
-        X = np.zeros((n_peptides, max_peptide_length), dtype=int)
+        X_index = np.zeros((n_peptides, max_peptide_length), dtype=int)
         index_dict = self.index_dict
         for i, peptide in enumerate(peptides):
             for j, amino_acid in enumerate(peptide):
                 # we're expecting the token '-' to have index 0 so it's
                 # OK to only loop until the end of the given sequence
-                X[i, j] = index_dict[amino_acid]
-        return X
+                X_index[i, j] = index_dict[amino_acid]
+        return X_index
 
     def encode_onehot(
             self,

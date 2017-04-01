@@ -13,8 +13,13 @@
 # limitations under the License.
 
 from .helpers import (
-    aligned_convolutions, embedding, make_sequence_input, local_max_pooling,
-    global_max_and_mean_pooling, flatten)
+    aligned_convolutions,
+    embedding,
+    make_sequence_input,
+    local_max_pooling,
+    global_max_and_mean_pooling,
+    flatten,
+    recurrent_layers)
 from .encoder import Encoder
 
 class SequenceInput(object):
@@ -33,6 +38,10 @@ class SequenceInput(object):
             conv_dropout=0.1,
             pool_size=3,
             pool_stride=2,
+            rnn_layer_sizes=[],
+            rnn_type="lstm",
+            rnn_bidirectional=True,
+            rnn_dropout=0.0,
             global_pooling=False):
         """
         Parameters
@@ -85,6 +94,18 @@ class SequenceInput(object):
             If using more than one convolutional layer, stride of the max
             pooling.
 
+        rnn_layer_sizes : list of int
+            Dimensionality of each RNN layer, defaults no RNN layers
+
+        rnn_type : {"lstm", "gru"}
+            Whether to use GRU or LSTM models for each RNN layer
+
+        rnn_bidirectional : bool
+            Use bidirectional RNNs
+
+        rnn_dropout : float
+            Recurrent dropout used in RNN layers
+
         global_pooling : bool
             Pool (mean & max) activations across sequence length
         """
@@ -101,12 +122,24 @@ class SequenceInput(object):
 
         self.n_symbols = n_symbols
         self.embedding_dim = embedding_dim
+
+        if isinstance(conv_filter_sizes, int):
+            conv_filter_sizes = [conv_filter_sizes]
+
         self.conv_filter_sizes = conv_filter_sizes
         self.conv_dropout = conv_dropout
         self.conv_output_dim = conv_output_dim
         self.n_conv_layers = n_conv_layers
         self.pool_size = pool_size
         self.pool_stride = pool_stride
+
+        if isinstance(rnn_layer_sizes, int):
+            rnn_layer_sizes = [rnn_layer_sizes]
+        self.rnn_layer_sizes = rnn_layer_sizes
+        self.rnn_type = rnn_type
+        self.rnn_bidirectional = rnn_bidirectional
+        self.rnn_dropout = rnn_dropout
+
         self.global_pooling = global_pooling
 
     def build(self):
@@ -139,6 +172,13 @@ class SequenceInput(object):
                         value,
                         size=self.pool_size,
                         stride=self.pool_stride)
+
+        if self.rnn_layer_sizes:
+            value = recurrent_layers(
+                layer_sizes=self.rnn_layer_sizes,
+                rnn_type=self.rnn_type,
+                recurrent_dropout=self.rnn_dropout,
+                bidirectional=self.rnn_bidirectional)
 
         if self.global_pooling:
             value = global_max_and_mean_pooling(value)

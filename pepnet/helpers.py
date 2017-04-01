@@ -25,6 +25,7 @@ from keras.layers import (
     Add,
     Flatten,
 )
+from keras.layers import LSTM, GRU, Bidirectional
 from keras.layers.convolutional import Conv1D
 from keras.layers.pooling import (
     MaxPooling1D,
@@ -181,3 +182,29 @@ def dense_layers(
             value = Dropout(dropout)(value)
     return value
 
+def recurrent_layers(
+        value,
+        layer_sizes,
+        bidirectional=True,
+        recurrent_dropout=0.0,
+        rnn_type="lstm"):
+    """
+    Make one or more RNN layers
+    """
+    if rnn_type == "lstm":
+        rnn_class = LSTM
+    elif rnn_type == "gru":
+        rnn_class = GRU
+    else:
+        raise ValueError("Unknown RNN type: %s" % (rnn_type,))
+
+    for i, layer_size in enumerate(layer_sizes):
+        last_layer = (i == len(layer_sizes) - 1)
+        rnn_layer = rnn_class(
+            layer_size,
+            return_sequences=not last_layer,
+            recurrent_dropout=recurrent_dropout)
+        if bidirectional:
+            rnn_layer = Bidirectional(rnn_layer, merge_mode="concat")
+        value = rnn_layer(value)
+    return value
