@@ -9,15 +9,19 @@ Sequence and model construction can both be handled for you by pepnet's
 `Predictor`:
 
 ```python
-Predictor(
+from pepnet import Predictor, SequenceInput, NumericInput, Output
+predictor = Predictor(
     inputs=[
         SequenceInput(length=4, name="x1", variable_length=True),
         NumericInput(dim=30, name="x2")],
     outputs=[Output(name="y", dim=1, activation="sigmoid")],
     hidden_layer_sizes=[30],
     hidden_activation="relu")
-predictor.fit({"x1": sequences, "x2": vectors}, "y": y)
-y = predictor.predict({"x1": other_sequences, "x2": other_vectors)["y"]
+sequences = ["ACAD", "ACAA", "ACA"]
+vectors = np.random.normal(10, 100, (3, 30))
+y = numpy.array([0, 1, 0])
+predictor.fit({"x1": sequences, "x2": vectors}, y)
+y_pred = predictor.predict({"x1": sequences, "x2": vectors})["y"]
 ```
 
 ## Manual index encoding of peptides
