@@ -1,4 +1,4 @@
-from pepdata import Predictor, SequenceInput, Output
+from pepnet import Predictor, SequenceInput, Output
 from nose.tools import eq_
 
 def test_basic_rnn():
