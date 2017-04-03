@@ -1,5 +1,5 @@
 import os
-import collections
+
 
 import numpy as np
 import pandas as pd
@@ -150,35 +150,30 @@ if __name__ == "__main__":
     epochs = 30
     cv = StratifiedKFold(n_splits=n_splits, shuffle=True)
 
-    scores = {
-        predictor_name: collections.defaultdict(list)
-        for predictor_name in make_predictors().keys()
-    }
-    for allele in df.columns:
-        print(allele)
-        curr_hits = hits[allele]
-        # stratify by short/medium/long
-        peptide_length_groups = [0 if len(s) < 14 else (2 if len(s) > 17 else 1) for s in curr_hits]
-        for fold_idx, (train_idx, test_idx) in enumerate(cv.split(X=curr_hits, y=peptide_length_groups)):
-            train_hits = [curr_hits[i] for i in train_idx]
-            train_decoys = make_decoy_set(train_hits)
-            train = list(train_hits) + list(train_decoys)
-            y_train = [True] * len(train_hits) + [False] * len(train_decoys)
+    with open('scores.csv', 'w') as f:
+        f.write("model,allele,fold,auc\n")
+        for allele in df.columns:
+            print(allele)
+            curr_hits = hits[allele]
+            # stratify by short/medium/long
+            peptide_length_groups = [0 if len(s) < 14 else (2 if len(s) > 17 else 1) for s in curr_hits]
+            for fold_idx, (train_idx, test_idx) in enumerate(cv.split(X=curr_hits, y=peptide_length_groups)):
+                train_hits = [curr_hits[i] for i in train_idx]
+                train_decoys = make_decoy_set(train_hits)
+                train = list(train_hits) + list(train_decoys)
+                y_train = [True] * len(train_hits) + [False] * len(train_decoys)
 
-            test_hits = [curr_hits[i] for i in test_idx]
-            test_decoys = make_decoy_set(test_hits)
-            test = list(test_hits) + list(test_decoys)
-            y_test = [True] * len(test_hits) + [False] * len(test_decoys)
-            for model_name, model in make_predictors().items():
-                print("==> Training %s" % model_name)
-                model.fit(train, y_train, epochs=epochs)
-                pred = model.predict(test)
-                auc = roc_auc_score(y_true=y_test, y_score=pred)
-                print("==> %s %d/%d %s: %0.4f" % (
-                    allele, fold_idx + 1, n_splits, model_name, auc))
-                scores[model_name][allele].append(auc)
-            with open('scores.csv', 'w') as f:
-                f.write("model,allele,fold,auc\n")
-                for m in scores.keys():
-                        for auc in scores[m][allele]:
-                            f.write("%s,%s,%d,%0.4f\n" % (m, allele, fold_idx, auc))
+                test_hits = [curr_hits[i] for i in test_idx]
+                test_decoys = make_decoy_set(test_hits)
+                test = list(test_hits) + list(test_decoys)
+                y_test = [True] * len(test_hits) + [False] * len(test_decoys)
+                predictor_dict = make_predictors()
+                for model_name in sorted(predictor_dict.keys()):
+                    model = predictor_dict[model_name]
+                    print("==> Training %s" % model_name)
+                    model.fit(train, y_train, epochs=epochs)
+                    pred = model.predict(test)
+                    auc = roc_auc_score(y_true=y_test, y_score=pred)
+                    print("==> %s %d/%d %s: %0.4f" % (
+                        allele, fold_idx + 1, n_splits, model_name, auc))
+                    f.write("%s,%s,%d,%0.4f\n" % (model_name, allele, fold_idx, auc))
