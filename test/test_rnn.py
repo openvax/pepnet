@@ -11,13 +11,10 @@ def test_basic_rnn():
             rnn_layer_sizes=[20],
             rnn_type="lstm",
             rnn_bidirectional=True),
-        outputs=Output(dim=1, name="y"))
+        outputs=Output(dim=1, activation="sigmoid", name="y"))
     x = ["SF", "Y", "AALL"]
-    y = pred.predict(x=x)["y"]
-    assert eq_(len(x), len(y))
-    found_rnn_layer = False
-    for layer in pred.model.layers:
-        print(layer)
-        if "LSTM" in layer.name:
-            found_rnn_layer = True
+    y = pred.predict({"x": x})["y"]
+    eq_(len(x), len(y))
+    found_rnn_layer = any(
+        "bidirectional" in layer.name for layer in pred.model.layers)
     assert found_rnn_layer

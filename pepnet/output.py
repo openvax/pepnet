@@ -21,8 +21,8 @@ class Output(Numeric):
     """
     def __init__(
             self,
-            dim,
-            activation,
+            dim=1,
+            activation="linear",
             name=None,
             loss="mse",
             hidden_layer_sizes=[],
