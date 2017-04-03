@@ -41,7 +41,6 @@ class SequenceInput(object):
             rnn_layer_sizes=[],
             rnn_type="lstm",
             rnn_bidirectional=True,
-            rnn_dropout=0.0,
             global_pooling=False):
         """
         Parameters
@@ -103,14 +102,14 @@ class SequenceInput(object):
         rnn_bidirectional : bool
             Use bidirectional RNNs
 
-        rnn_dropout : float
-            Recurrent dropout used in RNN layers
-
         global_pooling : bool
             Pool (mean & max) activations across sequence length
         """
         self.name = name
         self.length = length
+
+        if encoding not in {"index", "onehot"}:
+            raise ValueError("Invalid encoding: %s" % encoding)
         self.encoding = encoding
         self.variable_length = variable_length
 
@@ -138,7 +137,6 @@ class SequenceInput(object):
         self.rnn_layer_sizes = rnn_layer_sizes
         self.rnn_type = rnn_type
         self.rnn_bidirectional = rnn_bidirectional
-        self.rnn_dropout = rnn_dropout
 
         self.global_pooling = global_pooling
 
@@ -178,7 +176,6 @@ class SequenceInput(object):
                 value=value,
                 layer_sizes=self.rnn_layer_sizes,
                 rnn_type=self.rnn_type,
-                recurrent_dropout=self.rnn_dropout,
                 bidirectional=self.rnn_bidirectional)
 
         if self.global_pooling:

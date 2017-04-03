@@ -136,6 +136,7 @@ class Predictor(object):
             loss = self._get_single_output().loss
         model.compile(loss=loss, optimizer=self.optimizer)
 
+
     def _build_and_compile(self):
         model = self._build()
         self._compile(model)

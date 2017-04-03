@@ -186,7 +186,7 @@ def recurrent_layers(
         value,
         layer_sizes,
         bidirectional=True,
-        recurrent_dropout=0.0,
+        dropout=0.0,
         rnn_type="lstm"):
     """
     Make one or more RNN layers
@@ -203,7 +203,7 @@ def recurrent_layers(
         rnn_layer = rnn_class(
             layer_size,
             return_sequences=not last_layer,
-            recurrent_dropout=recurrent_dropout)
+            dropout=dropout)
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer, merge_mode="concat")
         value = rnn_layer(value)
