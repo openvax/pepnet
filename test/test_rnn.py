@@ -10,7 +10,6 @@ def test_basic_rnn():
             encoding="index",
             rnn_layer_sizes=[20],
             rnn_type="lstm",
-            rnn_dropout=0.25,
             rnn_bidirectional=True),
         outputs=Output(dim=1, name="y"))
     x = ["SF", "Y", "AALL"]
