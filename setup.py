@@ -53,6 +53,7 @@ if __name__ == '__main__':
         author_email="alex.rubinsteyn@mssm.edu",
         url="https://github.com/hammerlab/pepnet",
         license="http://www.apache.org/licenses/LICENSE-2.0.html",
+        packages=["pepnet", "pepnet.synthetic_data"],
         classifiers=[
             'Development Status :: 3 - Alpha',
             'Environment :: Console',
