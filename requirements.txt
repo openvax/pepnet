@@ -1,4 +1,4 @@
 numpy
 scipy
 nose
-keras>2.0.2
+keras>=2.0.2
