@@ -136,7 +136,6 @@ class Predictor(object):
             loss = self._get_single_output().loss
         model.compile(loss=loss, optimizer=self.optimizer)
 
-
     def _build_and_compile(self):
         model = self._build()
         self._compile(model)
@@ -195,14 +194,23 @@ class Predictor(object):
         else:
             return list(outputs.values())[0]
 
-    def fit(self, inputs, outputs, batch_size=32, epochs=100):
+    def fit(
+            self,
+            inputs,
+            outputs,
+            batch_size=32,
+            epochs=100,
+            sample_weight=None,
+            class_weight=None):
         inputs = self._prepare_inputs(inputs)
         outputs = self._prepare_outputs(outputs)
         self.model.fit(
             inputs,
             outputs,
             batch_size=batch_size,
-            epochs=epochs)
+            epochs=epochs,
+            sample_weight=sample_weight,
+            class_weight=class_weight)
 
     def predict(self, inputs):
         predictions = self.model.predict(self._prepare_inputs(inputs))
