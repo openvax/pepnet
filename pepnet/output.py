@@ -25,20 +25,20 @@ class Output(Numeric):
             activation="linear",
             name=None,
             loss="mse",
-            hidden_layer_sizes=[],
-            hidden_activation="relu",
-            hidden_dropout=0,
-            batch_normalization=False,
+            dense_layer_sizes=[],
+            dense_activation="relu",
+            dense_dropout=0,
+            dense_batch_normalization=False,
             transform=None,
             inverse_transform=None):
         Numeric.__init__(
             self,
             name=name,
             dim=dim,
-            hidden_layer_sizes=hidden_layer_sizes,
-            hidden_activation=hidden_activation,
-            hidden_dropout=hidden_dropout,
-            batch_normalization=batch_normalization,
+            dense_layer_sizes=dense_layer_sizes,
+            dense_activation=dense_activation,
+            dense_dropout=dense_dropout,
+            dense_batch_normalization=dense_batch_normalization,
             transform=transform)
         self.activation = activation
         self.loss = loss
@@ -47,10 +47,10 @@ class Output(Numeric):
     def build(self, value):
         hidden = dense_layers(
             value,
-            layer_sizes=self.hidden_layer_sizes,
-            activation=self.hidden_activation,
-            dropout=self.hidden_dropout,
-            batch_normalization=self.batch_normalization)
+            layer_sizes=self.dense_layer_sizes,
+            activation=self.dense_activation,
+            dropout=self.dense_dropout,
+            batch_normalization=self.dense_batch_normalization)
         output = dense(
             hidden,
             dim=self.dim,

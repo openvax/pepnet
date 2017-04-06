@@ -25,8 +25,8 @@ class NumericInput(Numeric):
             name=self.name, dim=self.dim, dtype=self.dtype)
         hidden = dense_layers(
             value=input_object,
-            layer_sizes=self.hidden_layer_sizes,
-            activation=self.hidden_activation,
-            dropout=self.hidden_dropout,
-            batch_normalization=self.batch_normalization)
+            layer_sizes=self.dense_layer_sizes,
+            activation=self.dense_activation,
+            dropout=self.dense_dropout,
+            batch_normalization=self.dense_batch_normalization)
         return input_object, hidden

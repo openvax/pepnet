@@ -21,10 +21,10 @@ class Numeric(object):
             dim,
             name=None,
             dtype="float32",
-            hidden_layer_sizes=[],
-            hidden_activation="relu",
-            hidden_dropout=0,
-            batch_normalization=False,
+            dense_layer_sizes=[],
+            dense_activation="relu",
+            dense_dropout=0,
+            dense_batch_normalization=False,
             transform=None):
         """
         Parameters
@@ -38,16 +38,16 @@ class Numeric(object):
         dtype : str
             Most common option is "float32" but might also be "int32"
 
-        hidden_layer_sizes : list of int
+        dense_layer_sizes : list of int
             Size of each dense layer after the input
 
-        hidden_activation : str
+        dense_activation : str
             Activation functin for dense layers after input
 
-        hidden_dropout : float
+        dense_dropout : float
             Fraction of values to randomly set to 0 during training
 
-        batch_normalization : bool
+        dense_batch_normalization : bool
             Use Batch Normalization after hidden layers
 
         transform : fn, optional
@@ -56,10 +56,10 @@ class Numeric(object):
         self.name = name
         self.dim = dim
         self.dtype = dtype
-        self.hidden_layer_sizes = hidden_layer_sizes
-        self.hidden_activation = hidden_activation
-        self.hidden_dropout = hidden_dropout
-        self.batch_normalization = batch_normalization
+        self.dense_layer_sizes = dense_layer_sizes
+        self.dense_activation = dense_activation
+        self.dense_dropout = dense_dropout
+        self.dense_batch_normalization = dense_batch_normalization
         self.transform = transform
 
     def build(self):

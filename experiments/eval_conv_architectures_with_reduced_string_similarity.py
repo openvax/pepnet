@@ -161,7 +161,7 @@ if __name__ == "__main__":
                     row_dict = {
                         "width": width,
                         "layer_size": layer_size,
-                        "n_conv_layers": n_conv_layers,
+                        "n_layers": n_conv_layers,
                         "dropout": dropout,
                     }
                     print("==> Training %s" % (row_dict,))

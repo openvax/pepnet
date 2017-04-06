@@ -19,7 +19,8 @@ from .helpers import (
     local_max_pooling,
     global_max_and_mean_pooling,
     flatten,
-    recurrent_layers)
+    recurrent_layers,
+    dense_layers)
 from .encoder import Encoder
 
 class SequenceInput(object):
@@ -41,7 +42,11 @@ class SequenceInput(object):
             rnn_layer_sizes=[],
             rnn_type="lstm",
             rnn_bidirectional=True,
-            global_pooling=False):
+            global_pooling=False,
+            dense_layer_sizes=[],
+            dense_activation="relu",
+            dense_dropout=0.25,
+            dense_batch_normalization=False):
         """
         Parameters
         ----------
@@ -104,6 +109,17 @@ class SequenceInput(object):
 
         global_pooling : bool
             Pool (mean & max) activations across sequence length
+
+        dense_layer_sizes : list of int
+            Dimensionality of dense transformations after convolutional
+            and recurrent layers
+
+        dense_activation: str
+
+        dense_dropout : float
+
+        dense_batch_normalization : bool
+            Apply batch normalization between hidden layers
         """
         self.name = name
         self.length = length
@@ -137,8 +153,13 @@ class SequenceInput(object):
         self.rnn_layer_sizes = rnn_layer_sizes
         self.rnn_type = rnn_type
         self.rnn_bidirectional = rnn_bidirectional
-
         self.global_pooling = global_pooling
+
+        # Dense layers after all temporal processing
+        self.dense_layer_sizes = dense_layer_sizes
+        self.dense_activation = dense_activation
+        self.dense_dropout = dense_dropout
+        self.dense_batch_normalization = dense_batch_normalization
 
     def build(self):
         input_object = make_sequence_input(
@@ -180,6 +201,13 @@ class SequenceInput(object):
 
         if self.global_pooling:
             value = global_max_and_mean_pooling(value)
+
+        value = dense_layers(
+            value,
+            layer_sizes=self.dense_layer_sizes,
+            activation=self.dense_activation,
+            dropout=self.dense_dropout,
+            batch_normalization=self.dense_batch_normalization)
 
         if value.ndim > 2:
             value = flatten(value)
