@@ -52,7 +52,7 @@ def synthetic_peptides_by_subsequence(
     peptides = []
 
     # Generate non-binders
-    for (length, weight) in lengths_series.items():
+    for (length, weight) in lengths_series.iteritems():
         peptides.extend(
             random_peptides(round(weight * num_non_binders), round(length)))
 
