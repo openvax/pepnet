@@ -42,8 +42,8 @@ def synthetic_peptides_by_subsequence(
     if not isinstance(lengths, dict):
         lengths = dict((length, 1.0) for length in lengths)
 
-    lengths = pandas.Series(lengths)
-    lengths /= len(lengths)
+    lengths_series = pandas.Series(lengths)
+    lengths_series /= len(lengths)
 
     num_binders = int(round(num_peptides * fraction_binders))
     num_non_binders = num_peptides - num_binders
@@ -52,15 +52,20 @@ def synthetic_peptides_by_subsequence(
     peptides = []
 
     # Generate non-binders
-    for (length, weight) in lengths.items():
+    for (length, weight) in lengths_series.items():
         peptides.extend(
             random_peptides(round(weight * num_non_binders), round(length)))
 
     for binding_core in binding_subsequences:
         # Generate binders
-        lengths_binders = lengths.ix[lengths.index >= len(binding_core)]
+        lengths_binders = lengths_series.ix[
+            lengths_series.index >= len(binding_core)
+        ]
         normalized_lengths_binders = (
-            lengths_binders / lengths_binders.sum() / len(binding_subsequences))
+            lengths_binders /
+            lengths_binders.sum() /
+            len(binding_subsequences))
+
         for (length, weight) in normalized_lengths_binders.items():
             if length >= len(binding_core):
                 num_peptides_to_make = int(round(weight * num_binders))
