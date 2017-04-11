@@ -1,7 +1,9 @@
-from pepnet import Predictor, SequenceInput, NumericInput, Output
-from pepnet.synthetic_data import synthetic_peptides_by_subsequence
+import pandas
 from numpy.random import randn
 from numpy import log, exp
+
+from pepnet import Predictor, SequenceInput, NumericInput, Output
+from pepnet.synthetic_data import synthetic_peptides_by_subsequence
 from nose.tools import eq_
 
 
@@ -84,9 +86,10 @@ def test_predictor_on_more_data():
     test_df = synthetic_peptides_by_subsequence(1000)
     predictor.fit(
         {"x": train_df.index.values}, train_df.binder.values, epochs=20)
-    y_pred = predictor.predict({"x": test_df.index.values})['y']
-    binder_mean_pred = y_pred[test_df.binder > 0].mean()
-    nonbinder_mean_pred = y_pred[test_df.binder == 0].mean()
+    (y_pred,) = predictor.predict({"x": test_df.index.values})['y'].T
+    y_pred = pandas.Series(y_pred, index=test_df.index)
+    binder_mean_pred = y_pred[test_df.binder].mean()
+    nonbinder_mean_pred = y_pred[~test_df.binder].mean()
     print(binder_mean_pred, nonbinder_mean_pred)
     assert binder_mean_pred > nonbinder_mean_pred * 2, (
         binder_mean_pred, nonbinder_mean_pred)
