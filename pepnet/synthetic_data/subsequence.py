@@ -66,7 +66,7 @@ def synthetic_peptides_by_subsequence(
             lengths_binders.sum() /
             len(binding_subsequences))
 
-        for (length, weight) in normalized_lengths_binders.items():
+        for (length, weight) in normalized_lengths_binders.iteritems():
             if length >= len(binding_core):
                 num_peptides_to_make = int(round(weight * num_binders))
                 if length == len(binding_core):
