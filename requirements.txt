@@ -2,3 +2,4 @@ numpy
 scipy
 nose
 keras>=2.0.2
+serializable

@@ -12,9 +12,9 @@ from sklearn.metrics import roc_auc_score
 from pepnet import Predictor, SequenceInput, Output
 
 def make_predictors(
-        widths=[8, 9, 10],
+        widths=[9],
         layer_sizes=[16],
-        n_conv_layers=[1, 2],
+        n_conv_layers=[2],
         conv_dropouts=[0]):
     return {
         (width, layer_size, n_layers, dropout): Predictor(
@@ -121,11 +121,10 @@ if __name__ == "__main__":
 
     n_splits = 3
     epochs = 30
-    cv = GroupKFold(n_splits=n_splits)
-
-    with open('scores_conv_reduced_similarity.csv', 'w') as f:
+    decoy_factors = [1, 2, 4, 8, 16, 32, 64]
+    with open('scores_conv_reduced_similarity_varying_decoys.csv', 'w') as f:
         writer = csv.DictWriter(f, fieldnames=[
-            "width", "layer_size", "n_layers", "dropout",
+            "width", "layer_size", "n_layers", "dropout", "decoys",
             "allele", "fold", "auc"])
         writer.writeheader()
         for allele, allele_hits in hits.items():
@@ -137,40 +136,48 @@ if __name__ == "__main__":
             print("Split %s hits into %d groups" % (
                 allele,
                 max(kmer_group_ids) + 1,))
-            for fold_idx, (train_idx, test_idx) in enumerate(
-                    cv.split(X=allele_hits, y=None, groups=kmer_group_ids)):
-                train_hits = [allele_hits[i] for i in train_idx]
-                train_decoys = make_decoy_set(train_hits)
-                train = list(train_hits) + list(train_decoys)
-                y_train = [True] * len(train_hits) + [False] * len(train_decoys)
-                train_weights = np.ones(len(y_train))
-                train_weights[:len(train_hits)] = sample_weights[train_idx]
+            for decoy_factor in decoy_factors:
+                for fold_idx, (train_idx, test_idx) in enumerate(
+                        GroupKFold(n_splits=n_splits).split(
+                            X=allele_hits, y=None, groups=kmer_group_ids)):
+                    train_hits = [allele_hits[i] for i in train_idx]
+                    train_decoys = make_decoy_set(train_hits, multiple=decoy_factor)
+                    train = list(train_hits) + list(train_decoys)
+                    y_train = [True] * len(train_hits) + [False] * len(train_decoys)
+                    train_weights = np.ones(len(y_train))
+                    train_weights[:len(train_hits)] = sample_weights[train_idx]
+                    # balance classes
+                    positive_weight = sample_weights[train_idx].sum()
+                    negative_weight = positive_weight / len(train_decoys)
+                    train_weights[len(train_hits):] = negative_weight
 
-                test_hits = [allele_hits[i] for i in test_idx]
-                test_decoys = make_decoy_set(test_hits)
-                test = list(test_hits) + list(test_decoys)
-                y_test = [True] * len(test_hits) + [False] * len(test_decoys)
-                test_weights = np.ones(len(y_test))
-                test_weights[:len(test_hits)] = sample_weights[test_idx]
+                    test_hits = [allele_hits[i] for i in test_idx]
+                    test_decoys = make_decoy_set(test_hits, multiple=10)
+                    test = list(test_hits) + list(test_decoys)
+                    y_test = [True] * len(test_hits) + [False] * len(test_decoys)
+                    test_weights = np.ones(len(y_test))
+                    test_weights[:len(test_hits)] = sample_weights[test_idx]
 
-                predictor_dict = make_predictors()
+                    predictor_dict = make_predictors()
 
-                for key in sorted(predictor_dict.keys()):
-                    model = predictor_dict[key]
-                    (width, layer_size, n_conv_layers, dropout) = key
-                    row_dict = {
-                        "width": width,
-                        "layer_size": layer_size,
-                        "n_layers": n_conv_layers,
-                        "dropout": dropout,
-                    }
-                    print("==> Training %s" % (row_dict,))
-                    model.fit(train, y_train, sample_weight=train_weights, epochs=epochs)
-                    pred = model.predict(test)
-                    auc = roc_auc_score(y_true=y_test, y_score=pred, sample_weight=test_weights)
-                    print("==> %s %d/%d %s: %0.4f" % (
-                        allele, fold_idx + 1, n_splits, row_dict, auc))
-                    row_dict["allele"] = allele
-                    row_dict["fold"] = fold_idx
-                    row_dict["auc"] = auc
-                    writer.writerow(row_dict)
+                    for key in sorted(predictor_dict.keys()):
+                        model = predictor_dict[key]
+                        (width, layer_size, n_conv_layers, dropout) = key
+                        row_dict = {
+                            "width": width,
+                            "layer_size": layer_size,
+                            "n_layers": n_conv_layers,
+                            "dropout": dropout,
+                            "decoys": decoy_factor,
+                            "allele": allele,
+                            "fold": fold_idx,
+                        }
+                        print("==> Training %s" % (row_dict,))
+                        model.fit(train, y_train, sample_weight=train_weights, epochs=epochs)
+                        pred = model.predict(test)
+                        auc = roc_auc_score(y_true=y_test, y_score=pred, sample_weight=test_weights)
+                        print("==> %s %d/%d %s: %0.4f" % (
+                            allele, fold_idx + 1, n_splits, row_dict, auc))
+                        row_dict["auc"] = auc
+                        writer.writerow(row_dict)
+                        f.flush()
