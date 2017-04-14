@@ -14,6 +14,8 @@
 
 import numpy as np
 from keras.models import Model
+from keras.utils import plot_model
+
 from serializable import Serializable
 
 from .numeric_input import NumericInput
@@ -28,10 +30,10 @@ class Predictor(Serializable):
             inputs,
             outputs,
             merge_mode="concat",
-            hidden_layer_sizes=[],
-            hidden_activation="relu",
-            hidden_dropout=0.25,
-            batch_normalization=False,
+            dense_layer_sizes=[],
+            dense_activation="relu",
+            dense_dropout=0.25,
+            dense_batch_normalization=False,
             optimizer="rmsprop"):
 
         if isinstance(inputs, (NumericInput, SequenceInput)):
@@ -40,20 +42,17 @@ class Predictor(Serializable):
         if isinstance(outputs, (Output,)):
             outputs = [outputs]
 
-        self.inputs = {i.name: i for i in inputs}
-        self.input_order = [i.name for i in inputs]
+        self.inputs = inputs
 
         if len(outputs) > 1 and any(not o.name for o in outputs):
             raise ValueError("All outputs must have names")
-        self.outputs = {o.name: o for o in outputs}
 
-        self.output_order = [o.name for o in outputs]
-
+        self.outputs = outputs
         self.merge_mode = merge_mode
-        self.hidden_layer_sizes = hidden_layer_sizes
-        self.hidden_activation = hidden_activation
-        self.hidden_dropout = hidden_dropout
-        self.batch_normalization = batch_normalization
+        self.dense_layer_sizes = dense_layer_sizes
+        self.dense_activation = dense_activation
+        self.dense_dropout = dense_dropout
+        self.dense_batch_normalization = dense_batch_normalization
         self.optimizer = optimizer
         self.model = self._build_and_compile()
 
@@ -71,6 +70,22 @@ class Predictor(Serializable):
                 raise ValueError("Predictor must have names for all %d inputs" % (
                     self.num_inputs))
             return True
+
+    @property
+    def inputs_dict(self):
+        return {i.name: i for i in self.inputs}
+
+    @property
+    def input_order(self):
+        return [i.name for i in self.inputs]
+
+    @property
+    def outputs_dict(self):
+        return {o.name: o for o in self.outputs}
+
+    @property
+    def output_order(self):
+        return [o.name for o in self.outputs]
 
     @property
     def use_output_dict(self):
@@ -93,7 +108,7 @@ class Predictor(Serializable):
         When use_output_dict is False then we know that there's only one
         output and we can use it without knowing its name.
         """
-        outputs = list(self.outputs.values())
+        outputs = self.outputs
         if len(outputs) == 0:
             raise ValueError("Expected at least one output")
         elif len(outputs) > 1:
@@ -104,7 +119,7 @@ class Predictor(Serializable):
     def _build(self):
         input_dict = {}
         subgraphs = []
-        for (input_name, input_descriptor) in self.inputs.items():
+        for (input_name, input_descriptor) in self.inputs_dict.items():
             input_obj, subgraph = input_descriptor.build()
             input_dict[input_name] = input_obj
             subgraphs.append(subgraph)
@@ -115,13 +130,13 @@ class Predictor(Serializable):
 
         hidden = dense_layers(
             combined,
-            layer_sizes=self.hidden_layer_sizes,
-            activation=self.hidden_activation,
-            dropout=self.hidden_dropout,
-            batch_normalization=self.batch_normalization)
+            layer_sizes=self.dense_layer_sizes,
+            activation=self.dense_activation,
+            dropout=self.dense_dropout,
+            batch_normalization=self.dense_batch_normalization)
 
         output_dict = {}
-        for output_name, output_descriptor in self.outputs.items():
+        for output_name, output_descriptor in self.outputs_dict.items():
             output_graph = output_descriptor.build(hidden)
             output_dict[output_name] = output_graph
 
@@ -132,7 +147,7 @@ class Predictor(Serializable):
     def _compile(self, model):
         if self.use_output_dict:
             loss = {
-                name: self.outputs[name].loss_fn for name in self.output_order
+                output.name: output.loss_fn for output in self.outputs
             }
         else:
             loss = self._get_single_output().loss_fn
@@ -167,8 +182,8 @@ class Predictor(Serializable):
                 "Expected inputs to be list, array, or dict, got %s" % (
                     type(inputs)))
         encoded_inputs = {
-            name: self.inputs[name].encode(inputs[name])
-            for name in self.input_order
+            name: i.encode(inputs[name])
+            for name, i in self.inputs_dict.items()
         }
         if self.use_input_dict:
             return encoded_inputs
@@ -181,10 +196,16 @@ class Predictor(Serializable):
                 raise ValueError("Expected %d outputs but got 1" % self.num_outputs)
             outputs = {self.output_order[0]: outputs}
         elif isinstance(outputs, np.ndarray):
-            if self.num_outputs != outputs.shape[1]:
+            if outputs.ndim == 1:
+                outputs = np.expand_dims(outputs, 1)
+
+            n_given_outputs = outputs.shape[1]
+
+            if self.num_outputs != n_given_outputs:
                 raise ValueError("Expected %d outputs but got %d" % (
                     self.num_outputs,
-                    outputs.shape[1]))
+                    n_given_outputs))
+
             outputs = {
                 output_name: outputs[:, i]
                 for i, output_name
@@ -195,13 +216,13 @@ class Predictor(Serializable):
                 type(outputs)))
         if encode:
             outputs = {
-                name: self.outputs[name].encode(outputs[name])
-                for name in self.output_order
+                name: output.encode(outputs[name])
+                for name, output in self.outputs_dict.items()
             }
         if decode:
             outputs = {
-                name: self.outputs[name].decode(outputs[name])
-                for name in self.output_order
+                name: output.decode(outputs[name])
+                for name, output in self.outputs_dict.items()
             }
         if self.use_output_dict:
             return outputs
@@ -217,7 +238,7 @@ class Predictor(Serializable):
             sample_weight=None,
             class_weight=None):
         inputs = self._prepare_inputs(inputs)
-        outputs = self._prepare_outputs(outputs)
+        outputs = self._prepare_outputs(outputs, encode=True)
         self.model.fit(
             inputs,
             outputs,
@@ -228,4 +249,8 @@ class Predictor(Serializable):
 
     def predict(self, inputs):
         predictions = self.model.predict(self._prepare_inputs(inputs))
-        return self._prepare_outputs(predictions, decode=True)
+        predictions = self._prepare_outputs(predictions, decode=True)
+        return predictions
+
+    def save_diagram(self, filename="model.png"):
+        plot_model(self.model, to_file=filename)

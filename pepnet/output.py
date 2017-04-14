@@ -12,12 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import numpy as np
-import keras.losses
-
 from .helpers import dense_layers, dense
 from .numeric import Numeric
-from .losses import positive_only_mse
+from .losses import masked_mse
 
 class Output(Numeric):
     """
@@ -34,8 +31,7 @@ class Output(Numeric):
             dense_dropout=0,
             dense_batch_normalization=False,
             transform=None,
-            inverse_transform=None,
-            mask_negative=False):
+            inverse_transform=None):
         Numeric.__init__(
             self,
             name=name,
@@ -48,7 +44,6 @@ class Output(Numeric):
         self.activation = activation
         self.loss = loss
         self.inverse_transform = inverse_transform
-        self.mask_negative = mask_negative
 
     def build(self, value):
         hidden = dense_layers(
@@ -65,19 +60,9 @@ class Output(Numeric):
         return output
 
     def decode(self, x):
-        if self.inverse_transform:
+        if self.inverse_transform is not None:
             return self.inverse_transform(x)
         return x
-
-    def encode(self, x):
-        if self.mask_negative:
-            x[np.isnan(x)] = -1
-            negative = (x < 0)
-            valid = ~negative
-            x = x.copy()
-            x[valid] = Numeric.encode(self, x[valid])
-        else:
-            return Numeric.encode(self, x)
 
     @property
     def loss_fn(self):
@@ -85,12 +70,7 @@ class Output(Numeric):
         If output requires masking then apply it to the loss function,
         otherwise just return the loss function.
         """
-        if self.mask_negative:
-            if self.loss == "mse":
-                return positive_only_mse
-            else:
-                raise ValueError("No masked loss available for '%s'" % (
-                    self.loss,))
+        if self.loss == "mse":
+            return masked_mse
         else:
-            return keras.losses.deserialize(self.loss)
-
+            raise ValueError("Only MSE supported, not '%s'" % self.loss)

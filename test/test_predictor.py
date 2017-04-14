@@ -79,14 +79,14 @@ def test_predictor_on_more_data():
     predictor = Predictor(
         inputs=[SequenceInput(length=20, name="x", variable_length=True)],
         outputs=[Output(dim=1, activation="sigmoid", name="y")],
-        hidden_layer_sizes=[30],
-        hidden_activation="relu")
+        dense_layer_sizes=[30],
+        dense_activation="relu")
 
     train_df = synthetic_peptides_by_subsequence(1000)
     test_df = synthetic_peptides_by_subsequence(1000)
     predictor.fit(
         {"x": train_df.index.values}, train_df.binder.values, epochs=20)
-    (y_pred,) = predictor.predict({"x": test_df.index.values})['y'].T
+    y_pred = predictor.predict({"x": test_df.index.values})['y']
     y_pred = pandas.Series(y_pred, index=test_df.index)
     binder_mean_pred = y_pred[test_df.binder].mean()
     nonbinder_mean_pred = y_pred[~test_df.binder].mean()

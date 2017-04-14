@@ -14,6 +14,7 @@
 
 
 import keras.backend as K
+import theano.tensor as T
 
 def positive_only_mse(y_true, y_pred):
     """
@@ -22,6 +23,14 @@ def positive_only_mse(y_true, y_pred):
     of explicitly passing an output mask as an Input to a keras model.
     """
     diff = y_pred - y_true
+    squared = K.square(diff)
     mask = y_pred >= 0
-    diff *= mask
-    return K.mean(K.square(diff), axis=-1)
+    squared *= K.cast(mask, "float32")
+    return K.mean(squared, axis=-1)
+
+def masked_mse(y_true, y_pred):
+    diff = y_pred - y_true
+    squared = K.square(diff)
+    return K.mean(
+        K.switch(T.isnan(y_true), 0.0, squared),
+        axis=-1)
