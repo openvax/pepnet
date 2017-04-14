@@ -192,10 +192,9 @@ class Predictor(Serializable):
 
     def _prepare_outputs(self, outputs, encode=False, decode=False):
         if isinstance(outputs, list):
-            if self.num_outputs != 1:
-                raise ValueError("Expected %d outputs but got 1" % self.num_outputs)
-            outputs = {self.output_order[0]: outputs}
-        elif isinstance(outputs, np.ndarray):
+            outputs = np.array(outputs).squeeze().T
+
+        if isinstance(outputs, np.ndarray):
             if outputs.ndim == 1:
                 outputs = np.expand_dims(outputs, 1)
 

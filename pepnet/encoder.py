@@ -139,13 +139,18 @@ class Encoder(object):
         if self.variable_length_sequences:
             max_observed_length = max(len(p) for p in peptides)
             if max_observed_length > max_peptide_length:
+                example = [p for p in peptides if len(p) == max_observed_length][0]
                 raise ValueError(
-                    "Can't have peptide(s) of length %d and max_peptide_length=%d" % (
+                    "Can't have peptide(s) of length %d and max_peptide_length = %d (example '%s')" % (
                         max_observed_length,
-                        max_peptide_length))
+                        max_peptide_length,
+                        example))
         elif any(len(p) != max_peptide_length for p in peptides):
-            raise ValueError("Expected all peptides to have length %d" % (
-                max_peptide_length))
+            example = [p for p in peptides if len(p) != max_peptide_length][0]
+            raise ValueError("Expected all peptides to have length %d, '%s' has length %d" % (
+                max_peptide_length,
+                example,
+                len(example)))
         return max_peptide_length
 
     def _validate_and_prepare_peptides(self, peptides, max_peptide_length=None):
