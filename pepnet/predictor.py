@@ -176,10 +176,20 @@ class Predictor(Serializable):
             return list(encoded_inputs.values())[0]
 
     def _prepare_outputs(self, outputs, encode=False, decode=False):
-        if isinstance(outputs, (list, np.ndarray)):
+        if isinstance(outputs, list):
             if self.num_outputs != 1:
                 raise ValueError("Expected %d outputs but got 1" % self.num_outputs)
             outputs = {self.output_order[0]: outputs}
+        elif isinstance(outputs, np.ndarray):
+            if self.num_outputs != outputs.shape[1]:
+                raise ValueError("Expected %d outputs but got %d" % (
+                    self.num_outputs,
+                    outputs.shape[1]))
+            outputs = {
+                output_name: outputs[:, i]
+                for i, output_name
+                in enumerate(self.output_order)
+            }
         elif not isinstance(outputs, dict):
             raise ValueError("Expected outputs to list, array, or dict, got %s" % (
                 type(outputs)))

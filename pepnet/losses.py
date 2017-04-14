@@ -22,6 +22,6 @@ def positive_only_mse(y_true, y_pred):
     of explicitly passing an output mask as an Input to a keras model.
     """
     diff = y_pred - y_true
-    mask = y_pred < 0
+    mask = y_pred >= 0
     diff *= mask
     return K.mean(K.square(diff), axis=-1)

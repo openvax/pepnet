@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import numpy as np
 import keras.losses
 
 from .helpers import dense_layers, dense
@@ -67,6 +68,16 @@ class Output(Numeric):
         if self.inverse_transform:
             return self.inverse_transform(x)
         return x
+
+    def encode(self, x):
+        if self.mask_negative:
+            x[np.isnan(x)] = -1
+            negative = (x < 0)
+            valid = ~negative
+            x = x.copy()
+            x[valid] = Numeric.encode(self, x[valid])
+        else:
+            return Numeric.encode(self, x)
 
     @property
     def loss_fn(self):
