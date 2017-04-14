@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import keras.losses
+
 from .helpers import dense_layers, dense
 from .numeric import Numeric
+from .losses import positive_only_mse
 
 class Output(Numeric):
     """
@@ -30,7 +33,8 @@ class Output(Numeric):
             dense_dropout=0,
             dense_batch_normalization=False,
             transform=None,
-            inverse_transform=None):
+            inverse_transform=None,
+            mask_negative=False):
         Numeric.__init__(
             self,
             name=name,
@@ -43,6 +47,7 @@ class Output(Numeric):
         self.activation = activation
         self.loss = loss
         self.inverse_transform = inverse_transform
+        self.mask_negative = mask_negative
 
     def build(self, value):
         hidden = dense_layers(
@@ -62,3 +67,19 @@ class Output(Numeric):
         if self.inverse_transform:
             return self.inverse_transform(x)
         return x
+
+    @property
+    def loss_fn(self):
+        """
+        If output requires masking then apply it to the loss function,
+        otherwise just return the loss function.
+        """
+        if self.mask_negative:
+            if self.loss == "mse":
+                return positive_only_mse
+            else:
+                raise ValueError("No masked loss available for '%s'" % (
+                    self.loss,))
+        else:
+            return keras.losses.deserialize(self.loss)
+

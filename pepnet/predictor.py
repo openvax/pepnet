@@ -14,6 +14,7 @@
 
 import numpy as np
 from keras.models import Model
+from serializable import Serializable
 
 from .numeric_input import NumericInput
 from .sequence_input import SequenceInput
@@ -21,7 +22,7 @@ from .output import Output
 from .helpers import merge, dense_layers
 
 
-class Predictor(object):
+class Predictor(Serializable):
     def __init__(
             self,
             inputs,
@@ -45,6 +46,7 @@ class Predictor(object):
         if len(outputs) > 1 and any(not o.name for o in outputs):
             raise ValueError("All outputs must have names")
         self.outputs = {o.name: o for o in outputs}
+
         self.output_order = [o.name for o in outputs]
 
         self.merge_mode = merge_mode
@@ -130,13 +132,15 @@ class Predictor(object):
     def _compile(self, model):
         if self.use_output_dict:
             loss = {
-                name: self.outputs[name].loss for name in self.output_order
+                name: self.outputs[name].loss_fn for name in self.output_order
             }
         else:
-            loss = self._get_single_output().loss
+            loss = self._get_single_output().loss_fn
         model.compile(loss=loss, optimizer=self.optimizer)
 
     def _build_and_compile(self):
+        if self.num_inputs == 0:
+            raise ValueError("Predictor must have at least one output")
         model = self._build()
         self._compile(model)
         return model

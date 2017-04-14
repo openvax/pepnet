@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from serializable import Serializable
+
 from .helpers import (
     aligned_convolutions,
     embedding,
@@ -23,7 +25,7 @@ from .helpers import (
     dense_layers)
 from .encoder import Encoder
 
-class SequenceInput(object):
+class SequenceInput(Serializable):
     def __init__(
             self,
             length,
@@ -202,15 +204,15 @@ class SequenceInput(object):
         if self.global_pooling:
             value = global_max_and_mean_pooling(value)
 
+        if value.ndim > 2:
+            value = flatten(value)
+
         value = dense_layers(
             value,
             layer_sizes=self.dense_layer_sizes,
             activation=self.dense_activation,
             dropout=self.dense_dropout,
             batch_normalization=self.dense_batch_normalization)
-
-        if value.ndim > 2:
-            value = flatten(value)
 
         return input_object, value
 

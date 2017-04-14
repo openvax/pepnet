@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-class Numeric(object):
+from serializable import Serializable
+
+class Numeric(Serializable):
     """
     Base class for numeric input and output
     """
