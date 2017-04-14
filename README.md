@@ -15,14 +15,32 @@ predictor = Predictor(
         SequenceInput(length=4, name="x1", variable_length=True),
         NumericInput(dim=30, name="x2")],
     outputs=[Output(name="y", dim=1, activation="sigmoid")],
-    hidden_layer_sizes=[30],
-    hidden_activation="relu")
+    dense_layer_sizes=[30],
+    dense_activation="relu")
 sequences = ["ACAD", "ACAA", "ACA"]
 vectors = np.random.normal(10, 100, (3, 30))
 y = numpy.array([0, 1, 0])
 predictor.fit({"x1": sequences, "x2": vectors}, y)
 y_pred = predictor.predict({"x1": sequences, "x2": vectors})["y"]
 ```
+
+## Convolutional sequence filtering
+
+This model takes an amino acid sequence (of up to length 50) and applies to it two layers of 9mer convolution with 3x maxpooling and 2x downsampling in between. The second layer's activations are then pooled across all sequence positions (using both mean and max pooling) and passed to a single dense output node called "y". 
+
+```python
+peptide = 
+predictor = Predictor(
+    inputs=[SequenceInput(
+        length=50, name="peptide", encoding="index", variable_length=True,
+        conv_filter_sizes=[9],
+        conv_output_dim=8,
+        n_conv_layers=2,
+        global_pooling=True)
+    ],
+    outputs=[Output(name="y", dim=1, activation="sigmoid")])
+```
+
 
 ## Manual index encoding of peptides
 
