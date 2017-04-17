@@ -24,14 +24,19 @@ from keras.layers import (
     Multiply,
     Add,
     Flatten,
+    Lambda,
+    LSTM,
+    GRU,
+    Bidirectional
 )
-from keras.layers import LSTM, GRU, Bidirectional
 from keras.layers.convolutional import Conv1D
 from keras.layers.pooling import (
     MaxPooling1D,
     GlobalMaxPooling1D,
     GlobalAveragePooling1D
 )
+import keras.backend as K
+import keras.initializers
 
 def make_onehot_sequence_input(name, length, n_symbols):
     return Input(
@@ -180,6 +185,34 @@ def dense_layers(
 
         if dropout > 0:
             value = Dropout(dropout)(value)
+    return value
+
+
+def highway_layer(value, activation="tanh", dropout=0, gate_bias=-3):
+    dims = K.int_shape(value)
+    if len(dims) != 2:
+        raise ValueError(
+            "Expected 2d value (batch_size, dims) but got shape %s" % (
+                dims,))
+    dim = dims[-1]
+    gate_bias_initializer = keras.initializers.Constant(gate_bias)
+    gate = Dense(units=dim, bias_initializer=gate_bias_initializer)(value)
+    gate = Activation("sigmoid")(gate)
+    negated_gate = Lambda(
+        lambda x: 1.0 - x,
+        output_shape=(dim,))(gate)
+    transformed = Dense(units=dim)(value)
+    transformed = Activation(activation)(value)
+    transformed_gated = Multiply()([gate, transformed])
+    pass_through_gated = Multiply()([negated_gate, value])
+    value = Add()([transformed_gated, pass_through_gated])
+    if dropout > 0:
+        value = Dropout(dropout)(value)
+    return value
+
+def highway_layers(value, n_layers, activation="tanh", dropout=0):
+    for i in range(n_layers):
+        value = highway_layer(value, activation=activation, dropout=dropout)
     return value
 
 def recurrent_layers(
