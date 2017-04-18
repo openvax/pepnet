@@ -228,8 +228,7 @@ class Predictor(Serializable):
         else:
             return list(outputs.values())[0]
 
-    def fit(
-            self,
+    def fit(self,
             inputs,
             outputs,
             batch_size=32,
@@ -246,10 +245,15 @@ class Predictor(Serializable):
             sample_weight=sample_weight,
             class_weight=class_weight)
 
+    def predict_scores(self, inputs):
+        return self._prepare_outputs(
+            self.model.predict(self._prepare_inputs(inputs)),
+            decode=False)
+
     def predict(self, inputs):
-        predictions = self.model.predict(self._prepare_inputs(inputs))
-        predictions = self._prepare_outputs(predictions, decode=True)
-        return predictions
+        return self._prepare_outputs(
+            self.model.predict(self._prepare_inputs(inputs)),
+            decode=True)
 
     def save_diagram(self, filename="model.png"):
         plot_model(self.model, to_file=filename)
