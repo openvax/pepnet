@@ -12,8 +12,8 @@ from sklearn.metrics import roc_auc_score
 from pepnet import Predictor, SequenceInput, Output
 
 def make_predictors(
-        widths=[9, 10],
-        layer_sizes=[16, 32],
+        widths=[9],
+        layer_sizes=[16],
         n_conv_layers=[2],
         conv_dropouts=[0]):
     return {
@@ -22,7 +22,7 @@ def make_predictors(
                 name="peptide",
                 length=22,
                 variable_length=True,
-                conv_filter_sizes=[width],
+                conv_filter_sizes=[1, 3, width],
                 n_conv_layers=n_layers,
                 conv_output_dim=layer_size,
                 conv_dropout=dropout,
@@ -120,10 +120,10 @@ if __name__ == "__main__":
     hits = load_hits()
 
     n_splits = 3
-    epochs = 30
+
     cv = GroupKFold(n_splits=n_splits)
 
-    with open('scores_conv_saturation.csv', 'w') as f:
+    with open('scores_conv_saturation_larger_models.csv', 'w') as f:
         writer = csv.DictWriter(f, fieldnames=[
             "n_training",
             "width", "layer_size", "n_layers", "dropout",
@@ -148,13 +148,14 @@ if __name__ == "__main__":
                 y_test = [True] * len(test_hits) + [False] * len(test_decoys)
                 test_weights = np.ones(len(y_test))
                 test_weights[:len(test_hits)] = sample_weights[test_idx]
-                for n_training in [50, 100, 150, 200, 250, 300, len(all_train_hits)]:
+                for n_training in np.linspace(50, len(all_train_hits), num=10, dtype=int):
+                    epochs = min(10**4 // n_training, 50)
                     train_hits = all_train_hits[:n_training]
                     train_decoys = make_decoy_set(train_hits)
                     train = list(train_hits) + list(train_decoys)
                     y_train = [True] * len(train_hits) + [False] * len(train_decoys)
                     train_weights = np.ones(len(y_train))
-                    train_weights[:len(train_hits)] = sample_weights[train_idx]
+                    train_weights[:len(train_hits)] = sample_weights[train_idx[:n_training]]
                     predictor_dict = make_predictors()
                     for key in sorted(predictor_dict.keys()):
                         model = predictor_dict[key]

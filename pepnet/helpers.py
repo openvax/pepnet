@@ -75,7 +75,15 @@ def merge(values, merge_mode):
 def flatten(value):
     return Flatten()(value)
 
-def embedding(value, n_symbols, output_dim, dropout=0, initial_weights=None):
+def regularize(value, batch_normalization=False, dropout=0.0):
+    if batch_normalization:
+        value = BatchNormalization()(value)
+    if dropout:
+        value = Dropout(dropout)(value)
+    return value
+
+def embedding(
+        value, n_symbols, output_dim, dropout=0, initial_weights=None):
     if initial_weights:
         n_rows, n_cols = initial_weights.shape
         if n_rows != n_symbols or n_cols != output_dim:
@@ -148,16 +156,29 @@ def aligned_convolutions(value, filter_sizes, output_dim, dropout=0.0):
 def local_max_pooling(value, size=3, stride=2):
     return MaxPooling1D(pool_size=size, strides=stride)(value)
 
-def global_max_pooling(value):
-    return GlobalMaxPooling1D()(value)
+def global_max_pooling(value, batch_normalization=False, dropout=0):
+    return regularize(
+        value=GlobalMaxPooling1D()(value),
+        batch_normalization=batch_normalization,
+        dropout=dropout)
 
-def global_mean_pooling(value):
-    return GlobalAveragePooling1D()(value)
+def global_mean_pooling(value, batch_normalization=False, dropout=0):
+    return regularize(
+        value=GlobalAveragePooling1D()(value),
+        batch_normalization=batch_normalization,
+        dropout=dropout)
 
-def global_max_and_mean_pooling(value):
+def global_max_and_mean_pooling(
+        value, batch_normalization=False, dropout=0):
     return merge([
-        global_max_pooling(value),
-        global_mean_pooling(value)], "concat")
+        global_max_pooling(
+            value=value,
+            batch_normalization=batch_normalization,
+            dropout=dropout),
+        global_mean_pooling(
+            value=value,
+            batch_normalization=batch_normalization,
+            dropout=dropout)], "concat")
 
 def dense(value, dim, activation, init="glorot_uniform", name=None):
     if name:
@@ -178,17 +199,14 @@ def dense_layers(
         batch_normalization=False,
         dropout=0.0):
     for i, dim in enumerate(layer_sizes):
-        value = dense(value, dim=dim, init=init, activation=activation)
-
-        if batch_normalization:
-            value = BatchNormalization()(value)
-
-        if dropout > 0:
-            value = Dropout(dropout)(value)
+        value = regularize(
+            value=dense(value, dim=dim, init=init, activation=activation),
+            batch_normalization=batch_normalization,
+            dropout=dropout)
     return value
 
 
-def highway_layer(value, activation="tanh", dropout=0, gate_bias=-3):
+def highway_layer(value, activation="tanh", gate_bias=-3):
     dims = K.int_shape(value)
     if len(dims) != 2:
         raise ValueError(
@@ -206,14 +224,25 @@ def highway_layer(value, activation="tanh", dropout=0, gate_bias=-3):
     transformed_gated = Multiply()([gate, transformed])
     pass_through_gated = Multiply()([negated_gate, value])
     value = Add()([transformed_gated, pass_through_gated])
-    if dropout > 0:
-        value = Dropout(dropout)(value)
     return value
 
-def highway_layers(value, n_layers, activation="tanh", dropout=0):
+def highway_layers(
+        value,
+        n_layers,
+        activation="tanh",
+        batch_normalization=False,
+        dropout=0):
+    """
+    Construct "highway" layers which default to the identity function
+    but can learn to transform their input. The batch normalization
+    and dropout parameters only affect the output of the last layer.
+    """
     for i in range(n_layers):
         value = highway_layer(value, activation=activation, dropout=dropout)
-    return value
+    return regularize(
+        value=value,
+        batch_normalization=batch_normalization,
+        dropout=dropout)
 
 def recurrent_layers(
         value,

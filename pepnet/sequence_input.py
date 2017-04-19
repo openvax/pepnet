@@ -22,6 +22,7 @@ from .helpers import (
     global_max_and_mean_pooling,
     flatten,
     recurrent_layers,
+    highway_layers,
     dense_layers)
 from .encoder import Encoder
 
@@ -32,23 +33,36 @@ class SequenceInput(Serializable):
             name=None,
             variable_length=False,
             n_symbols=None,
+            # embedding of symbol indices into vectors
             encoding="index",
             embedding_dim=32,
             embedding_dropout=0,
+            # convolutional layers
             conv_filter_sizes=[],
             n_conv_layers=1,
             conv_output_dim=16,
             conv_dropout=0.1,
             pool_size=3,
             pool_stride=2,
+            # RNN
             rnn_layer_sizes=[],
             rnn_type="lstm",
             rnn_bidirectional=True,
+            # global pooling of conv or RNN outputs
             global_pooling=False,
+            global_pooling_batch_normalization=False,
+            global_pooling_dropout=0,
+            # transform global pooling representation with
+            # dense layers
             dense_layer_sizes=[],
             dense_activation="relu",
             dense_dropout=0.25,
-            dense_batch_normalization=False):
+            dense_batch_normalization=False,
+            # highway layers
+            n_highway_layers=0,
+            highway_activation="tanh",
+            highway_batch_normalization=False,
+            highway_dropout=0,):
         """
         Parameters
         ----------
@@ -112,16 +126,37 @@ class SequenceInput(Serializable):
         global_pooling : bool
             Pool (mean & max) activations across sequence length
 
+        global_pooling_batch_normalization : bool
+            Apply BatchNormalization after global pooling
+
+        global_pooling_dropout : float
+            Fraction of entries to randomly drop during training after
+            global pooling
+
         dense_layer_sizes : list of int
             Dimensionality of dense transformations after convolutional
             and recurrent layers
 
         dense_activation: str
+            Activation function to use after each dense layer
 
         dense_dropout : float
+            Fraction of dense output values to drop during training
 
         dense_batch_normalization : bool
             Apply batch normalization between hidden layers
+
+        n_highway_layers : int
+            Number of highway layers to use after dense layers
+
+        highway_batch_normalization : bool
+            Apply BatchNormalization after final highway layer
+
+        highway_dropout : float
+            Apply dropout after final highway layer
+
+        highway_activation : str
+            Activation function of each layer in the highway network
         """
         self.name = name
         self.length = length
@@ -155,13 +190,22 @@ class SequenceInput(Serializable):
         self.rnn_layer_sizes = rnn_layer_sizes
         self.rnn_type = rnn_type
         self.rnn_bidirectional = rnn_bidirectional
+
         self.global_pooling = global_pooling
+        self.global_pooling_batch_normalization = global_pooling_batch_normalization
+        self.global_pooling_dropout = global_pooling_dropout
 
         # Dense layers after all temporal processing
         self.dense_layer_sizes = dense_layer_sizes
         self.dense_activation = dense_activation
         self.dense_dropout = dense_dropout
         self.dense_batch_normalization = dense_batch_normalization
+
+        # Highway network after dense layers
+        self.n_highway_layers = n_highway_layers
+        self.highway_batch_normalization = highway_batch_normalization
+        self.highway_dropout = highway_dropout
+        self.highway_activation = highway_activation
 
     def build(self):
         input_object = make_sequence_input(
@@ -202,7 +246,10 @@ class SequenceInput(Serializable):
                 bidirectional=self.rnn_bidirectional)
 
         if self.global_pooling:
-            value = global_max_and_mean_pooling(value)
+            value = global_max_and_mean_pooling(
+                value,
+                batch_normalization=self.global_pooling_batch_normalization,
+                dropout=self.global_pooling_dropout)
 
         if value.ndim > 2:
             value = flatten(value)
@@ -214,6 +261,13 @@ class SequenceInput(Serializable):
             dropout=self.dense_dropout,
             batch_normalization=self.dense_batch_normalization)
 
+        if self.n_highway_layers:
+            value = highway_layers(
+                value,
+                activation=self.highway_activation,
+                n_layers=self.n_highway_layers,
+                dropout=self.highway_dropout,
+                batch_normalization=self.highway_batch_normalization)
         return input_object, value
 
     def encode(self, peptides):
