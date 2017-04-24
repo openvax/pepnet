@@ -286,14 +286,16 @@ def highway_layers(
         n_layers,
         activation="tanh",
         batch_normalization=False,
-        dropout=0):
+        dropout=0,
+        gate_bias=-3):
     """
     Construct "highway" layers which default to the identity function
     but can learn to transform their input. The batch normalization
     and dropout parameters only affect the output of the last layer.
     """
     for i in range(n_layers):
-        value = highway_layer(value, activation=activation, dropout=dropout)
+        value = highway_layer(
+            value, activation=activation, gate_bias=gate_bias)
     return regularize(
         value=value,
         batch_normalization=batch_normalization,
