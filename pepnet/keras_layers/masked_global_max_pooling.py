@@ -25,7 +25,9 @@ class MaskedGlobalMaxPooling1D(keras.layers.pooling._GlobalPooling1D):
     """
     supports_masking = True
 
-    def call(self, x, mask):
+    def call(self, x, mask=None):
+        if mask is None:
+            return K.max(x, axis=1)
         mask = K.cast(mask, "float32")
         expanded_mask = K.expand_dims(mask)
         # zero embedded vectors which come from masked characters

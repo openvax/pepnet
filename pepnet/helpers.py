@@ -12,6 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# from keras.layers.convolutional import Conv1D
+# from keras.layers.pooling import (
+#    MaxPooling1D,
+#    GlobalMaxPooling1D,
+#    GlobalAveragePooling1D)
+
+from .keras_layers.masked_maxpooling1d import MaskedMaxPooling1D as MaxPooling1D
+from .keras_layers.masked_conv1d import MaskedConv1D as Conv1D
+from .keras_layers.masked_global_average_pooling import (
+    MaskedGlobalAveragePooling1D as GlobalAveragePooling1D)
+from .keras_layers.masked_global_max_pooling import (
+    MaskedGlobalMaxPooling1D as GlobalMaxPooling1D)
+from .keras_layers.drop_mask import DropMask
+
 from keras.layers import (
     Input,
     Embedding,
@@ -21,6 +35,7 @@ from keras.layers import (
     Activation,
     BatchNormalization,
     Concatenate,
+    Reshape,
     Multiply,
     Add,
     Flatten,
@@ -29,12 +44,7 @@ from keras.layers import (
     GRU,
     Bidirectional
 )
-from keras.layers.convolutional import Conv1D
-from keras.layers.pooling import (
-    MaxPooling1D,
-    GlobalMaxPooling1D,
-    GlobalAveragePooling1D
-)
+
 import keras.backend as K
 import keras.initializers
 
@@ -73,7 +83,7 @@ def merge(values, merge_mode):
         return Multiply()(values)
 
 def flatten(value):
-    return Flatten()(value)
+    return Flatten()(DropMask()(value))
 
 def regularize(value, batch_normalization=False, dropout=0.0):
     if batch_normalization:
@@ -83,7 +93,7 @@ def regularize(value, batch_normalization=False, dropout=0.0):
     return value
 
 def embedding(
-        value, n_symbols, output_dim, dropout=0, initial_weights=None):
+        value, n_symbols, output_dim, dropout=0, initial_weights=None, mask_zero=True):
     if initial_weights:
         n_rows, n_cols = initial_weights.shape
         if n_rows != n_symbols or n_cols != output_dim:
@@ -95,13 +105,13 @@ def embedding(
         embedding_layer = Embedding(
             input_dim=n_symbols,
             output_dim=output_dim,
-            mask_zero=False,
+            mask_zero=mask_zero,
             weights=[initial_weights])
     else:
         embedding_layer = Embedding(
             input_dim=n_symbols,
             output_dim=output_dim,
-            mask_zero=False)
+            mask_zero=mask_zero)
 
     value = embedding_layer(value)
 
@@ -110,21 +120,60 @@ def embedding(
 
     return value
 
-def conv(value, filter_size, output_dim, dropout=0.0, padding="valid"):
+def parametric_conv(
+        value,
+        weight_source,
+        filter_size,
+        output_dim,
+        padding):
+    assert False, "Halp, how to make separate convs per sample"
+    n_timesteps, input_dim = K.int_shape(value)[-2:]
+    kernel_shape = (filter_size, input_dim, output_dim)
+    kernel = dense(
+        weight_source,
+        dim=kernel_shape[0] * kernel_shape[1] * kernel_shape[1],
+        activation="linear")
+    kernel = Reshape(kernel_shape)(kernel)
+    return K.conv1d(
+        value, kernel, padding=padding)
+
+def conv(
+        value,
+        filter_size,
+        output_dim,
+        dropout=0.0,
+        activation="linear",
+        padding="valid",
+        weight_source=None):
     """
     Perform a single scale of convolution and optionally add spatial dropout.
     """
-    conv_layer = Conv1D(
+    if weight_source is None:
+        conv_layer = Conv1D(
             filters=output_dim,
             kernel_size=filter_size,
+            padding=padding,
+            activation=activation)
+        convolved = conv_layer(value)
+    else:
+        convolved = parametric_conv(
+            value,
+            weight_source,
+            filter_size=filter_size,
+            output_dim=output_dim,
             padding=padding)
-    convolved = conv_layer(value)
     if dropout:
         # random drop some of the convolutional filters
         convolved = SpatialDropout1D(dropout)(convolved)
     return convolved
 
-def aligned_convolutions(value, filter_sizes, output_dim, dropout=0.0):
+def aligned_convolutions(
+        value,
+        filter_sizes,
+        output_dim,
+        activation="linear",
+        dropout=0.0,
+        weight_source=None):
     """
     Perform convolutions at multiple scales and concatenate their outputs.
 
@@ -138,6 +187,10 @@ def aligned_convolutions(value, filter_sizes, output_dim, dropout=0.0):
 
     dropout : float
         Dropout after convolutional
+
+    weight_source : tensor, optional
+        Compute weights as a function of existing tensor
+
     """
     if isinstance(filter_sizes, int):
         filter_sizes = [filter_sizes]
@@ -149,7 +202,9 @@ def aligned_convolutions(value, filter_sizes, output_dim, dropout=0.0):
             filter_size=size,
             output_dim=output_dim,
             dropout=dropout,
-            padding="same"))
+            padding="same",
+            activation=activation,
+            weight_source=weight_source))
     convolved = merge(convolved_list, "concat")
     return convolved
 

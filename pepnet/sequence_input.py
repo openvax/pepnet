@@ -37,11 +37,14 @@ class SequenceInput(Serializable):
             encoding="index",
             embedding_dim=32,
             embedding_dropout=0,
+            embedding_mask_zero=True,
             # convolutional layers
             conv_filter_sizes=[],
             n_conv_layers=1,
             conv_output_dim=16,
-            conv_dropout=0.1,
+            conv_dropout=0,
+            conv_activation="linear",
+            conv_weight_source=None,
             pool_size=3,
             pool_stride=2,
             # RNN
@@ -91,6 +94,9 @@ class SequenceInput(Serializable):
             What fraction of symbol representations are randomly set to 0
             during training?
 
+        embedding_mask_zero : bool
+            Mask zero values in the input sequences
+
         conv_filter_sizes : list of int
             Width of convolutional filters to apply to input vectors
 
@@ -104,6 +110,10 @@ class SequenceInput(Serializable):
         conv_dropout : float
             Fraction of convolutional activations to randomly set to 0 during
             training
+
+        conv_weight_source : tensor, optional
+            Determine weights of the convolution as a function of this
+            tensor (rather than learning parameters separately)
 
         pool_size : int
             If using more than one convolutional layer, how many timesteps
@@ -174,6 +184,8 @@ class SequenceInput(Serializable):
 
         self.n_symbols = n_symbols
         self.embedding_dim = embedding_dim
+        self.embedding_dropout = embedding_dropout
+        self.embedding_mask_zero = embedding_mask_zero
 
         if isinstance(conv_filter_sizes, int):
             conv_filter_sizes = [conv_filter_sizes]
@@ -181,7 +193,9 @@ class SequenceInput(Serializable):
         self.conv_filter_sizes = conv_filter_sizes
         self.conv_dropout = conv_dropout
         self.conv_output_dim = conv_output_dim
+        self.conv_activation = conv_activation
         self.n_conv_layers = n_conv_layers
+        self.conv_weight_source = conv_weight_source
         self.pool_size = pool_size
         self.pool_stride = pool_stride
 
@@ -220,17 +234,25 @@ class SequenceInput(Serializable):
             value = embedding(
                 input_object,
                 n_symbols=self.n_symbols,
-                output_dim=self.embedding_dim)
+                output_dim=self.embedding_dim,
+                mask_zero=self.embedding_mask_zero,
+                dropout=self.embedding_dropout)
         else:
             value = input_object
 
         if self.conv_filter_sizes:
+            conv_weight_source = self.conv_weight_source
+            if conv_weight_source is not None and isinstance(
+                    conv_weight_source, SequenceInput):
+                conv_weight_source = conv_weight_source.build()[1]
             for i in range(self.n_conv_layers):
                 value = aligned_convolutions(
                     value,
                     filter_sizes=self.conv_filter_sizes,
                     output_dim=self.conv_output_dim,
-                    dropout=self.conv_dropout)
+                    dropout=self.conv_dropout,
+                    activation=self.conv_activation,
+                    weight_source=conv_weight_source)
                 # add max pooling for all layers before the last
                 if i + 1 < self.n_conv_layers:
                     value = local_max_pooling(
