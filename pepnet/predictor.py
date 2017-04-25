@@ -266,11 +266,13 @@ class Predictor(Serializable):
         inputs = self._prepare_inputs(inputs)
         outputs = self._prepare_outputs(outputs, encode=True)
 
-        if sample_weight is not None and self.use_input_dict and isinstance(sample_weight, np.ndarray):
-            sample_weight = {
-                o.name: sample_weight
-                for o in self.outputs
-            }
+        if sample_weight is not None:
+            if self.use_input_dict and len(self.outputs) > 1:
+                if isinstance(sample_weight, np.ndarray):
+                    sample_weight = {
+                        o.name: sample_weight
+                        for o in self.outputs
+                    }
 
         self.model.fit(
             inputs,
