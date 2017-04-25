@@ -12,6 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# from keras.layers.convolutional import Conv1D
+# from keras.layers.pooling import (
+#    MaxPooling1D,
+#    GlobalMaxPooling1D,
+#    GlobalAveragePooling1D)
+
+from .keras_layers.masked_maxpooling1d import MaskedMaxPooling1D as MaxPooling1D
+from .keras_layers.masked_conv1d import MaskedConv1D as Conv1D
+from .keras_layers.masked_global_average_pooling import (
+    MaskedGlobalAveragePooling1D as GlobalAveragePooling1D)
+from .keras_layers.masked_global_max_pooling import (
+    MaskedGlobalMaxPooling1D as GlobalMaxPooling1D)
+from .keras_layers.drop_mask import DropMask
+
 from keras.layers import (
     Input,
     Embedding,
@@ -21,17 +35,18 @@ from keras.layers import (
     Activation,
     BatchNormalization,
     Concatenate,
+    Reshape,
     Multiply,
     Add,
     Flatten,
+    Lambda,
+    LSTM,
+    GRU,
+    Bidirectional
 )
-from keras.layers import LSTM, GRU, Bidirectional
-from keras.layers.convolutional import Conv1D
-from keras.layers.pooling import (
-    MaxPooling1D,
-    GlobalMaxPooling1D,
-    GlobalAveragePooling1D
-)
+
+import keras.backend as K
+import keras.initializers
 
 def make_onehot_sequence_input(name, length, n_symbols):
     return Input(
@@ -68,9 +83,17 @@ def merge(values, merge_mode):
         return Multiply()(values)
 
 def flatten(value):
-    return Flatten()(value)
+    return Flatten()(DropMask()(value))
 
-def embedding(value, n_symbols, output_dim, dropout=0, initial_weights=None):
+def regularize(value, batch_normalization=False, dropout=0.0):
+    if batch_normalization:
+        value = BatchNormalization()(value)
+    if dropout:
+        value = Dropout(dropout)(value)
+    return value
+
+def embedding(
+        value, n_symbols, output_dim, dropout=0, initial_weights=None, mask_zero=True):
     if initial_weights:
         n_rows, n_cols = initial_weights.shape
         if n_rows != n_symbols or n_cols != output_dim:
@@ -82,13 +105,13 @@ def embedding(value, n_symbols, output_dim, dropout=0, initial_weights=None):
         embedding_layer = Embedding(
             input_dim=n_symbols,
             output_dim=output_dim,
-            mask_zero=False,
+            mask_zero=mask_zero,
             weights=[initial_weights])
     else:
         embedding_layer = Embedding(
             input_dim=n_symbols,
             output_dim=output_dim,
-            mask_zero=False)
+            mask_zero=mask_zero)
 
     value = embedding_layer(value)
 
@@ -97,21 +120,60 @@ def embedding(value, n_symbols, output_dim, dropout=0, initial_weights=None):
 
     return value
 
-def conv(value, filter_size, output_dim, dropout=0.0, padding="valid"):
+def parametric_conv(
+        value,
+        weight_source,
+        filter_size,
+        output_dim,
+        padding):
+    assert False, "Halp, how to make separate convs per sample"
+    n_timesteps, input_dim = K.int_shape(value)[-2:]
+    kernel_shape = (filter_size, input_dim, output_dim)
+    kernel = dense(
+        weight_source,
+        dim=kernel_shape[0] * kernel_shape[1] * kernel_shape[1],
+        activation="linear")
+    kernel = Reshape(kernel_shape)(kernel)
+    return K.conv1d(
+        value, kernel, padding=padding)
+
+def conv(
+        value,
+        filter_size,
+        output_dim,
+        dropout=0.0,
+        activation="linear",
+        padding="valid",
+        weight_source=None):
     """
     Perform a single scale of convolution and optionally add spatial dropout.
     """
-    conv_layer = Conv1D(
+    if weight_source is None:
+        conv_layer = Conv1D(
             filters=output_dim,
             kernel_size=filter_size,
+            padding=padding,
+            activation=activation)
+        convolved = conv_layer(value)
+    else:
+        convolved = parametric_conv(
+            value,
+            weight_source,
+            filter_size=filter_size,
+            output_dim=output_dim,
             padding=padding)
-    convolved = conv_layer(value)
     if dropout:
         # random drop some of the convolutional filters
         convolved = SpatialDropout1D(dropout)(convolved)
     return convolved
 
-def aligned_convolutions(value, filter_sizes, output_dim, dropout=0.0):
+def aligned_convolutions(
+        value,
+        filter_sizes,
+        output_dim,
+        activation="linear",
+        dropout=0.0,
+        weight_source=None):
     """
     Perform convolutions at multiple scales and concatenate their outputs.
 
@@ -125,6 +187,10 @@ def aligned_convolutions(value, filter_sizes, output_dim, dropout=0.0):
 
     dropout : float
         Dropout after convolutional
+
+    weight_source : tensor, optional
+        Compute weights as a function of existing tensor
+
     """
     if isinstance(filter_sizes, int):
         filter_sizes = [filter_sizes]
@@ -136,23 +202,38 @@ def aligned_convolutions(value, filter_sizes, output_dim, dropout=0.0):
             filter_size=size,
             output_dim=output_dim,
             dropout=dropout,
-            padding="same"))
+            padding="same",
+            activation=activation,
+            weight_source=weight_source))
     convolved = merge(convolved_list, "concat")
     return convolved
 
 def local_max_pooling(value, size=3, stride=2):
     return MaxPooling1D(pool_size=size, strides=stride)(value)
 
-def global_max_pooling(value):
-    return GlobalMaxPooling1D()(value)
+def global_max_pooling(value, batch_normalization=False, dropout=0):
+    return regularize(
+        value=GlobalMaxPooling1D()(value),
+        batch_normalization=batch_normalization,
+        dropout=dropout)
 
-def global_mean_pooling(value):
-    return GlobalAveragePooling1D()(value)
+def global_mean_pooling(value, batch_normalization=False, dropout=0):
+    return regularize(
+        value=GlobalAveragePooling1D()(value),
+        batch_normalization=batch_normalization,
+        dropout=dropout)
 
-def global_max_and_mean_pooling(value):
+def global_max_and_mean_pooling(
+        value, batch_normalization=False, dropout=0):
     return merge([
-        global_max_pooling(value),
-        global_mean_pooling(value)], "concat")
+        global_max_pooling(
+            value=value,
+            batch_normalization=batch_normalization,
+            dropout=dropout),
+        global_mean_pooling(
+            value=value,
+            batch_normalization=batch_normalization,
+            dropout=dropout)], "concat")
 
 def dense(value, dim, activation, init="glorot_uniform", name=None):
     if name:
@@ -173,14 +254,52 @@ def dense_layers(
         batch_normalization=False,
         dropout=0.0):
     for i, dim in enumerate(layer_sizes):
-        value = dense(value, dim=dim, init=init, activation=activation)
-
-        if batch_normalization:
-            value = BatchNormalization()(value)
-
-        if dropout > 0:
-            value = Dropout(dropout)(value)
+        value = regularize(
+            value=dense(value, dim=dim, init=init, activation=activation),
+            batch_normalization=batch_normalization,
+            dropout=dropout)
     return value
+
+
+def highway_layer(value, activation="tanh", gate_bias=-3):
+    dims = K.int_shape(value)
+    if len(dims) != 2:
+        raise ValueError(
+            "Expected 2d value (batch_size, dims) but got shape %s" % (
+                dims,))
+    dim = dims[-1]
+    gate_bias_initializer = keras.initializers.Constant(gate_bias)
+    gate = Dense(units=dim, bias_initializer=gate_bias_initializer)(value)
+    gate = Activation("sigmoid")(gate)
+    negated_gate = Lambda(
+        lambda x: 1.0 - x,
+        output_shape=(dim,))(gate)
+    transformed = Dense(units=dim)(value)
+    transformed = Activation(activation)(value)
+    transformed_gated = Multiply()([gate, transformed])
+    pass_through_gated = Multiply()([negated_gate, value])
+    value = Add()([transformed_gated, pass_through_gated])
+    return value
+
+def highway_layers(
+        value,
+        n_layers,
+        activation="tanh",
+        batch_normalization=False,
+        dropout=0,
+        gate_bias=-3):
+    """
+    Construct "highway" layers which default to the identity function
+    but can learn to transform their input. The batch normalization
+    and dropout parameters only affect the output of the last layer.
+    """
+    for i in range(n_layers):
+        value = highway_layer(
+            value, activation=activation, gate_bias=gate_bias)
+    return regularize(
+        value=value,
+        batch_normalization=batch_normalization,
+        dropout=dropout)
 
 def recurrent_layers(
         value,

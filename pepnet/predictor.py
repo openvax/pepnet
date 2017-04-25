@@ -12,10 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from collections import OrderedDict
+
+from six import string_types
 import numpy as np
 from keras.models import Model
 from keras.utils import plot_model
-
 from serializable import Serializable
 
 from .numeric_input import NumericInput
@@ -118,15 +120,32 @@ class Predictor(Serializable):
 
     def _build(self):
         input_dict = {}
-        subgraphs = []
+        subgraphs_dict = OrderedDict()
         for (input_name, input_descriptor) in self.inputs_dict.items():
             input_obj, subgraph = input_descriptor.build()
             input_dict[input_name] = input_obj
-            subgraphs.append(subgraph)
-        if len(subgraphs) == 0:
+            subgraphs_dict[input_name] = subgraph
+
+        if len(subgraphs_dict) == 0:
             raise ValueError("At least one input required")
+        elif isinstance(self.merge_mode, string_types):
+            merge_dict = {tuple(subgraphs_dict.keys()): self.merge_mode}
+        elif not isinstance(self.merge_mode, dict):
+            raise TypeError("Expected 'merge' to be str or dict but got %s : %s " % (
+                self.merge_mode, type(self.merge_mode)))
         else:
-            combined = merge(subgraphs, self.merge_mode)
+            merge_dict = self.merge_mode
+
+        combined_tensors = []
+        for (input_names, merge_mode) in merge_dict.items():
+            if isinstance(input_names, string_types):
+                input_names = (input_names,)
+            combined_tensors.append(
+                merge([subgraphs_dict[name] for name in input_names],
+                        merge_mode))
+        # concatenate final tensor in case we're combining more than one
+        # group
+        combined = merge(combined_tensors, "concat")
 
         hidden = dense_layers(
             combined,
@@ -185,6 +204,10 @@ class Predictor(Serializable):
             name: i.encode(inputs[name])
             for name, i in self.inputs_dict.items()
         }
+        lengths = {name: len(x) for (name, x) in encoded_inputs.items()}
+        if any(l != list(lengths.values())[0] for l in lengths.values()):
+            raise ValueError("All inputs must be of the same length, given %s" % (
+                lengths,))
         if self.use_input_dict:
             return encoded_inputs
         else:
@@ -223,33 +246,52 @@ class Predictor(Serializable):
                 name: output.decode(outputs[name])
                 for name, output in self.outputs_dict.items()
             }
+        lengths = {name: len(x) for (name, x) in outputs.items()}
+        if any(l != list(lengths.values())[0] for l in lengths.values()):
+            raise ValueError(
+                "All outputs must be of the same length, given %s" % (lengths,))
         if self.use_output_dict:
             return outputs
         else:
             return list(outputs.values())[0]
 
-    def fit(
-            self,
+    def fit(self,
             inputs,
             outputs,
             batch_size=32,
             epochs=100,
             sample_weight=None,
             class_weight=None):
+
         inputs = self._prepare_inputs(inputs)
         outputs = self._prepare_outputs(outputs, encode=True)
+
+        if sample_weight is not None:
+            if self.use_input_dict and len(self.outputs) > 1:
+                if isinstance(sample_weight, np.ndarray):
+                    sample_weight = {
+                        o.name: sample_weight
+                        for o in self.outputs
+                    }
+
         self.model.fit(
             inputs,
             outputs,
             batch_size=batch_size,
             epochs=epochs,
             sample_weight=sample_weight,
-            class_weight=class_weight)
+            class_weight=class_weight,
+            shuffle=True)
+
+    def predict_scores(self, inputs):
+        return self._prepare_outputs(
+            self.model.predict(self._prepare_inputs(inputs)),
+            decode=False)
 
     def predict(self, inputs):
-        predictions = self.model.predict(self._prepare_inputs(inputs))
-        predictions = self._prepare_outputs(predictions, decode=True)
-        return predictions
+        return self._prepare_outputs(
+            self.model.predict(self._prepare_inputs(inputs)),
+            decode=True)
 
     def save_diagram(self, filename="model.png"):
         plot_model(self.model, to_file=filename)
