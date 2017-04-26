@@ -36,7 +36,8 @@ class Predictor(Serializable):
             dense_activation="relu",
             dense_dropout=0.25,
             dense_batch_normalization=False,
-            optimizer="rmsprop"):
+            optimizer="rmsprop",
+            training_metrics=[]):
 
         if isinstance(inputs, (NumericInput, SequenceInput)):
             inputs = [inputs]
@@ -56,6 +57,7 @@ class Predictor(Serializable):
         self.dense_dropout = dense_dropout
         self.dense_batch_normalization = dense_batch_normalization
         self.optimizer = optimizer
+        self.training_metrics = training_metrics
         self.model = self._build_and_compile()
 
     @property
@@ -170,7 +172,7 @@ class Predictor(Serializable):
             }
         else:
             loss = self._get_single_output().loss_fn
-        model.compile(loss=loss, optimizer=self.optimizer)
+        model.compile(loss=loss, optimizer=self.optimizer, metrics=self.training_metrics)
 
     def _build_and_compile(self):
         if self.num_inputs == 0:
@@ -261,7 +263,9 @@ class Predictor(Serializable):
             batch_size=32,
             epochs=100,
             sample_weight=None,
-            class_weight=None):
+            class_weight=None,
+            validation_data=None,
+            shuffle=True):
 
         inputs = self._prepare_inputs(inputs)
         outputs = self._prepare_outputs(outputs, encode=True)
@@ -281,7 +285,8 @@ class Predictor(Serializable):
             epochs=epochs,
             sample_weight=sample_weight,
             class_weight=class_weight,
-            shuffle=True)
+            shuffle=shuffle,
+            validation_data=validation_data)
 
     def predict_scores(self, inputs):
         return self._prepare_outputs(
