@@ -92,6 +92,10 @@ class Predictor(Serializable):
         return [o.name for o in self.outputs]
 
     @property
+    def output_names(self):
+        return self.output_order
+
+    @property
     def use_output_dict(self):
         if self.num_outputs == 1:
             output_name = self.output_order[0]
@@ -216,6 +220,9 @@ class Predictor(Serializable):
             return list(encoded_inputs.values())[0]
 
     def _prepare_outputs(self, outputs, encode=False, decode=False):
+        """
+        Returns a dictionary from output name to array of output values.
+        """
         if isinstance(outputs, list):
             outputs = np.array(outputs).squeeze().T
 
@@ -257,6 +264,39 @@ class Predictor(Serializable):
         else:
             return list(outputs.values())[0]
 
+    def _prepare_sample_weights(self, sample_weight):
+        if sample_weight is not None:
+            if self.use_input_dict and len(self.outputs) > 1:
+                if isinstance(sample_weight, np.ndarray):
+                    sample_weight = {
+                        o.name: sample_weight
+                        for o in self.outputs
+                    }
+        return sample_weight
+
+    def _prepare_data_tuple(self, data_tuple):
+        """
+        Data generators return either (input, output) or
+        (input, output, weights) tuples. This function transforms
+        these elements for use with Keras.
+        """
+        if len(data_tuple) == 2:
+            inputs, outputs = data_tuple
+            weights = None
+        else:
+            assert len(data_tuple) == 3, \
+                "Dataset expected to be (X, Y, weights), got %d elements" % (
+                    len(data_tuple),)
+            inputs, outputs, weights = data_tuple
+        inputs = self._prepare_inputs(inputs)
+        outputs = self._prepare_outputs(outputs)
+        weights = self._prepare_sample_weights(weights)
+        return inputs, outputs, weights
+
+    def _wrap_data_generator(self, generator):
+        for data_tuple in generator:
+            yield self._prepare_data_tuple(data_tuple)
+
     def fit(self,
             inputs,
             outputs,
@@ -265,20 +305,17 @@ class Predictor(Serializable):
             sample_weight=None,
             class_weight=None,
             validation_data=None,
-            shuffle=True):
+            shuffle=True,
+            callbacks=[]):
 
         inputs = self._prepare_inputs(inputs)
         outputs = self._prepare_outputs(outputs, encode=True)
+        sample_weight = self._prepare_sample_weights(sample_weight)
 
-        if sample_weight is not None:
-            if self.use_input_dict and len(self.outputs) > 1:
-                if isinstance(sample_weight, np.ndarray):
-                    sample_weight = {
-                        o.name: sample_weight
-                        for o in self.outputs
-                    }
+        if validation_data is not None:
+            validation_data = self._prepare_data_tuple(validation_data)
 
-        self.model.fit(
+        return self.model.fit(
             inputs,
             outputs,
             batch_size=batch_size,
@@ -286,7 +323,27 @@ class Predictor(Serializable):
             sample_weight=sample_weight,
             class_weight=class_weight,
             shuffle=shuffle,
-            validation_data=validation_data)
+            validation_data=validation_data,
+            callbacks=callbacks)
+
+    def fit_generator(
+            self,
+            generator,
+            steps_per_epoch,
+            **kwargs):
+        """
+        Expects a generator which returns tuples of
+            (inputs, outputs)
+            -or-
+            (inputs, outputs, sample_weights)
+        which are then transformed appropriately before being
+        passed on to the fit_generator method of the underlying
+        Keras model.
+        """
+        return self.model.fit_generator(
+            generator=self._wrap_data_generator(generator),
+            steps_per_epoch=steps_per_epoch,
+            **kwargs)
 
     def predict_scores(self, inputs):
         return self._prepare_outputs(

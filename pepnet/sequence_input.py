@@ -32,9 +32,11 @@ class SequenceInput(Serializable):
             length,
             name=None,
             variable_length=False,
-            n_symbols=None,
             # embedding of symbol indices into vectors
             encoding="index",
+            add_start_tokens=False,
+            add_stop_tokens=False,
+            # embedding
             embedding_dim=32,
             embedding_dropout=0,
             embedding_mask_zero=True,
@@ -78,13 +80,15 @@ class SequenceInput(Serializable):
         variable_length : bool
             Do we expect padding '-' characters in the input?
 
-        n_symbols : int
-            Number of distinct symbols in sequences, default expects
-            20 amino acids + 1 character for padding ('-')
-
         encoding : {"index", "onehot"}
             How are symbols represented: via integer indices or boolean
             vectors?
+
+        add_start_tokens : bool
+            Add "^" token to start of each sequence
+
+        add_stop_tokens : bool
+            Add "$" token to end of each sequence
 
         embedding_dim : int
             How many dimensions in the symbol embedding
@@ -170,19 +174,18 @@ class SequenceInput(Serializable):
         """
         self.name = name
         self.length = length
-
         if encoding not in {"index", "onehot"}:
             raise ValueError("Invalid encoding: %s" % encoding)
         self.encoding = encoding
+        self.add_start_tokens = add_start_tokens
+        self.add_stop_tokens = add_stop_tokens
         self.variable_length = variable_length
+        self.encoder = Encoder(
+            variable_length_sequences=self.variable_length,
+            add_start_tokens=self.add_start_tokens,
+            add_stop_tokens=self.add_stop_tokens)
+        self.n_symbols = len(self.encoder.tokens)
 
-        if not n_symbols:
-            if variable_length:
-                n_symbols = 21
-            else:
-                n_symbols = 20
-
-        self.n_symbols = n_symbols
         self.embedding_dim = embedding_dim
         self.embedding_dropout = embedding_dropout
         self.embedding_mask_zero = embedding_mask_zero
@@ -225,7 +228,7 @@ class SequenceInput(Serializable):
         input_object = make_sequence_input(
             encoding=self.encoding,
             name=self.name,
-            length=self.length,
+            length=self.length + self.add_start_tokens + self.add_stop_tokens,
             n_symbols=self.n_symbols)
 
         if self.encoding == "index":
@@ -293,10 +296,10 @@ class SequenceInput(Serializable):
         return input_object, value
 
     def encode(self, peptides):
-        encoder = Encoder(variable_length_sequences=self.variable_length)
         if self.encoding == "index":
-            return encoder.encode_index_array(
-                peptides, max_peptide_length=self.length)
+            return self.encoder.encode_index_array(
+                peptides,
+                max_peptide_length=self.length)
         else:
-            return encoder.encode_onehot(
+            return self.encoder.encode_onehot(
                 peptides, max_peptide_length=self.length)
