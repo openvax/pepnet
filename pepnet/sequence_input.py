@@ -14,7 +14,7 @@
 
 from serializable import Serializable
 
-from .helpers import (
+from .nn_helpers import (
     aligned_convolutions,
     embedding,
     make_sequence_input,
@@ -23,7 +23,8 @@ from .helpers import (
     flatten,
     recurrent_layers,
     highway_layers,
-    dense_layers)
+    dense_layers
+)
 from .encoder import Encoder
 
 class SequenceInput(Serializable):
@@ -45,6 +46,7 @@ class SequenceInput(Serializable):
             n_conv_layers=1,
             conv_output_dim=16,
             conv_dropout=0,
+            conv_batch_normalization=False,
             conv_activation="linear",
             conv_weight_source=None,
             pool_size=3,
@@ -108,12 +110,15 @@ class SequenceInput(Serializable):
             Number of convolutional layers (with interleaving max pooling)
             to create
 
-        conv_output_dim : int
+        conv_output_dim : int or dict
             Number of filters per size of convolution
 
         conv_dropout : float
             Fraction of convolutional activations to randomly set to 0 during
             training
+
+        conv_batch_normalization : bool
+            Apply batch normalization between convolutional layers
 
         conv_weight_source : tensor, optional
             Determine weights of the convolution as a function of this
@@ -195,6 +200,7 @@ class SequenceInput(Serializable):
 
         self.conv_filter_sizes = conv_filter_sizes
         self.conv_dropout = conv_dropout
+        self.conv_batch_normalization = conv_batch_normalization
         self.conv_output_dim = conv_output_dim
         self.conv_activation = conv_activation
         self.n_conv_layers = n_conv_layers
@@ -254,6 +260,7 @@ class SequenceInput(Serializable):
                     filter_sizes=self.conv_filter_sizes,
                     output_dim=self.conv_output_dim,
                     dropout=self.conv_dropout,
+                    batch_normalization=self.conv_batch_normalization,
                     activation=self.conv_activation,
                     weight_source=conv_weight_source)
                 # add max pooling for all layers before the last

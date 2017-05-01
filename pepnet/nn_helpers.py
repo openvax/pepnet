@@ -162,7 +162,7 @@ def conv(
             filter_size=filter_size,
             output_dim=output_dim,
             padding=padding)
-    if dropout:
+    if dropout > 0:
         # random drop some of the convolutional filters
         convolved = SpatialDropout1D(dropout)(convolved)
     return convolved
@@ -173,6 +173,7 @@ def aligned_convolutions(
         output_dim,
         activation="linear",
         dropout=0.0,
+        batch_normalization=False,
         weight_source=None):
     """
     Perform convolutions at multiple scales and concatenate their outputs.
@@ -194,18 +195,31 @@ def aligned_convolutions(
     """
     if isinstance(filter_sizes, int):
         filter_sizes = [filter_sizes]
+    if isinstance(output_dim, dict):
+        given_sizes = set(output_dim.keys())
+        if given_sizes != set(filter_sizes):
+            raise ValueError("Expected filter sizes %s but got %s" % (
+                set(filter_sizes), given_sizes))
+    else:
+        assert isinstance(output_dim, int)
+        output_dim = {size: output_dim for size in filter_sizes}
 
     convolved_list = []
     for size in filter_sizes:
         convolved_list.append(conv(
             value=value,
             filter_size=size,
-            output_dim=output_dim,
-            dropout=dropout,
+            output_dim=output_dim[size],
             padding="same",
             activation=activation,
-            weight_source=weight_source))
+            weight_source=weight_source,
+            dropout=0))
     convolved = merge(convolved_list, "concat")
+    if batch_normalization:
+        convolved = BatchNormalization()(convolved)
+    if dropout > 0:
+        # random drop some of the convolutional filters
+        convolved = SpatialDropout1D(dropout)(convolved)
     return convolved
 
 def local_max_pooling(value, size=3, stride=2):

@@ -23,7 +23,7 @@ from serializable import Serializable
 from .numeric_input import NumericInput
 from .sequence_input import SequenceInput
 from .output import Output
-from .helpers import merge, dense_layers
+from .nn_helpers import merge, dense_layers
 
 
 class Predictor(Serializable):
@@ -307,7 +307,6 @@ class Predictor(Serializable):
             validation_data=None,
             shuffle=True,
             callbacks=[]):
-
         inputs = self._prepare_inputs(inputs)
         outputs = self._prepare_outputs(outputs, encode=True)
         sample_weight = self._prepare_sample_weights(sample_weight)

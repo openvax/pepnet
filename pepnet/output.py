@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .helpers import dense_layers, dense
+from .nn_helpers import dense_layers, dense
 from .numeric import Numeric
 from .losses import masked_mse
 
