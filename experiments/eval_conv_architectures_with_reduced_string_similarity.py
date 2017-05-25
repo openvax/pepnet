@@ -16,7 +16,8 @@ def make_predictors(
         layer_sizes=[16],
         n_conv_layers=[1, 2],
         conv_dropouts=[0]):
-    return {
+    return {} 
+    """
         (width, layer_size, n_layers, dropout): Predictor(
             inputs=SequenceInput(
                 name="peptide",
@@ -33,7 +34,7 @@ def make_predictors(
         for n_layers in n_conv_layers
         for dropout in conv_dropouts
     }
-
+    """
 
 def make_decoy_set(hits, multiple=10):
     from collections import Counter
