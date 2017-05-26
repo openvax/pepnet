@@ -24,7 +24,7 @@ import ujson
 from .numeric_input import NumericInput
 from .sequence_input import SequenceInput
 from .output import Output
-from .nn_helpers import merge, dense_layers
+from .nn_helpers import merge, dense_layers, tensor_shape
 
 
 class Predictor(Serializable):
@@ -186,9 +186,7 @@ class Predictor(Serializable):
             output_dict[output_name] = output_graph
 
         inputs = [input_dict[name] for name in self.input_order]
-        print(inputs, [type(i) for i in inputs])
         outputs = [output_dict[name] for name in self.output_order]
-        print(outputs, [type(o) for o in outputs])
         return Model(inputs=inputs, outputs=outputs)
 
     def _compile(self, model):
@@ -434,7 +432,7 @@ class Predictor(Serializable):
             raise ValueError("Invalid output name: %s" % (name,))
 
     def get_weights(self):
-        return [w.get_value() for w in self.model.weights]
+        return [w.get_value().squeeze() for w in self.model.weights]
 
     def set_weights(self, weights):
         if len(self.model.weights) != len(weights):
@@ -442,10 +440,10 @@ class Predictor(Serializable):
                 len(self.model.weights),
                 len(weights)))
         for w_tensor, w_values in zip(self.model.weights, weights):
-            print(type(w_values))
-            if isinstance(w_values, str):
-                assert False
-            w_tensor.set_value(w_values.astype(w_tensor.dtype))
+            shape = tensor_shape(w_tensor)
+            w_compatible = w_values.reshape(shape)
+            w_compatible = w_compatible.astype(w_tensor.dtype)
+            w_tensor.set_value(w_compatible)
 
     def to_dict(self):
         return {
@@ -469,7 +467,6 @@ class Predictor(Serializable):
         output_reprs = config_dict.pop("outputs")
         inputs = [self._input_from_repr(i) for i in input_reprs]
         outputs = [self._output_from_repr(o) for o in output_reprs]
-        print(config_dict.keys())
         predictor = Predictor(inputs=inputs, outputs=outputs, **config_dict)
         predictor.set_weights(model_weights)
         return predictor
@@ -477,7 +474,19 @@ class Predictor(Serializable):
     def to_json(self):
         return ujson.dumps(self.to_dict())
 
+    def to_json_file(self, filename):
+        with open(filename, "w") as f:
+            f.write(self.to_json())
+
     @classmethod
     def from_json(cls, json_string):
         config_dict = ujson.loads(json_string)
         return cls.from_dict(config_dict)
+
+    @classmethod
+    def from_json_file(cls, filename):
+        with open(filename, "r") as f:
+            s = f.read()
+            if len(s) == 0:
+                raise ValueError("File '%s' is empty" % filename)
+            return cls.from_json(s)

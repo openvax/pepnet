@@ -67,6 +67,7 @@ if __name__ == '__main__':
             'numpy>=1.7',
             'keras>=2.0.2',
             'serializable',
+            'ujson'
         ],
         long_description=readme,
     )

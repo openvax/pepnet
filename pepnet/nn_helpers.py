@@ -342,3 +342,7 @@ def recurrent_layers(
             rnn_layer = Bidirectional(rnn_layer, merge_mode="concat")
         value = rnn_layer(value)
     return value
+
+def tensor_shape(x):
+    return K.int_shape(x)
+

@@ -326,7 +326,6 @@ class SequenceInput(Serializable):
 
     def build(self):
         input_object = self._build_input()
-        print(input_object, type(input_object))
         value = self._build_embedding(input_object)
         value = self._build_conv(value)
         value = self._build_rnn(value)
