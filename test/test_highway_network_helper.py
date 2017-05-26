@@ -1,4 +1,4 @@
-from pepnet.helpers import highway_layers
+from pepnet.nn_helpers import highway_layers
 from keras.layers import Input, Embedding, Dense, Flatten
 from keras.models import Model
 import numpy as np
@@ -9,7 +9,7 @@ def test_highway_layers():
     v = Embedding(input_dim=2, output_dim=10)(x)
     v = Flatten()(v)
     assert hasattr(v, "_keras_shape")
-    v = highway_layers(v, n_layers=20)
+    v = highway_layers(v, n_layers=n_highway_layers)
     output = Dense(1)(v)
     model = Model(inputs=[x], outputs=[output])
     assert len(model.layers) > n_highway_layers * 3

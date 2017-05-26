@@ -12,12 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# from keras.layers.convolutional import Conv1D
-# from keras.layers.pooling import (
-#    MaxPooling1D,
-#    GlobalMaxPooling1D,
-#    GlobalAveragePooling1D)
-
 from .keras_layers.masked_maxpooling1d import MaskedMaxPooling1D as MaxPooling1D
 from .keras_layers.masked_conv1d import MaskedConv1D as Conv1D
 from .keras_layers.masked_global_average_pooling import (
@@ -82,8 +76,10 @@ def merge(values, merge_mode):
     elif merge_mode == "multiply":
         return Multiply()(values)
 
-def flatten(value):
-    return Flatten()(DropMask()(value))
+def flatten(value, drop_mask=False):
+    if drop_mask:
+        value = DropMask()(value)
+    return Flatten()(value)
 
 def regularize(value, batch_normalization=False, dropout=0.0):
     if batch_normalization:
@@ -93,7 +89,12 @@ def regularize(value, batch_normalization=False, dropout=0.0):
     return value
 
 def embedding(
-        value, n_symbols, output_dim, dropout=0, initial_weights=None, mask_zero=True):
+        value,
+        n_symbols,
+        output_dim,
+        dropout=0,
+        initial_weights=None,
+        mask_zero=False):
     if initial_weights:
         n_rows, n_cols = initial_weights.shape
         if n_rows != n_symbols or n_cols != output_dim:

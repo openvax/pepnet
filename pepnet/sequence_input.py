@@ -40,11 +40,9 @@ class SequenceInput(Serializable):
             # embedding
             embedding_dim=32,
             embedding_dropout=0,
-            embedding_mask_zero=True,
             # convolutional layers
             conv_filter_sizes=[],
-            n_conv_layers=1,
-            conv_output_dim=16,
+            repeat_conv_layers=1,
             conv_dropout=0,
             conv_batch_normalization=False,
             conv_activation="linear",
@@ -100,18 +98,14 @@ class SequenceInput(Serializable):
             What fraction of symbol representations are randomly set to 0
             during training?
 
-        embedding_mask_zero : bool
-            Mask zero values in the input sequences
+        conv_filter_sizes : list of dict
+            List whose elements describe to convolutional layers. Each
+            element of the list is a dictionary whose keys are filter widths
+            and whose values are the number of filters associated with that
+            width.
 
-        conv_filter_sizes : list of int
-            Width of convolutional filters to apply to input vectors
-
-        n_conv_layers : int
-            Number of convolutional layers (with interleaving max pooling)
-            to create
-
-        conv_output_dim : int or dict
-            Number of filters per size of convolution
+        repeat_conv_layers : int
+            Number of times to repeat convolutional layers
 
         conv_dropout : float
             Fraction of convolutional activations to randomly set to 0 during
@@ -193,23 +187,16 @@ class SequenceInput(Serializable):
 
         self.embedding_dim = embedding_dim
         self.embedding_dropout = embedding_dropout
-        self.embedding_mask_zero = embedding_mask_zero
-
-        if isinstance(conv_filter_sizes, int):
-            conv_filter_sizes = [conv_filter_sizes]
 
         self.conv_filter_sizes = conv_filter_sizes
+        self.repeat_conv_layers = repeat_conv_layers
         self.conv_dropout = conv_dropout
         self.conv_batch_normalization = conv_batch_normalization
-        self.conv_output_dim = conv_output_dim
         self.conv_activation = conv_activation
-        self.n_conv_layers = n_conv_layers
         self.conv_weight_source = conv_weight_source
         self.pool_size = pool_size
         self.pool_stride = pool_stride
 
-        if isinstance(rnn_layer_sizes, int):
-            rnn_layer_sizes = [rnn_layer_sizes]
         self.rnn_layer_sizes = rnn_layer_sizes
         self.rnn_type = rnn_type
         self.rnn_bidirectional = rnn_bidirectional
@@ -230,61 +217,92 @@ class SequenceInput(Serializable):
         self.highway_dropout = highway_dropout
         self.highway_activation = highway_activation
 
-    def build(self):
-        input_object = make_sequence_input(
+    def _build_input(self):
+        return make_sequence_input(
             encoding=self.encoding,
             name=self.name,
             length=self.length + self.add_start_tokens + self.add_stop_tokens,
             n_symbols=self.n_symbols)
 
+    def _build_embedding(self, input_object):
         if self.encoding == "index":
-            assert self.embedding_dim > 0, \
-                "Invalid embedding dim: %d" % self.embedding_dim
-            value = embedding(
+            if self.embedding_dim <= 0:
+                raise ValueError(
+                    "Invalid embedding dim: %d" % self.embedding_dim)
+            return embedding(
                 input_object,
                 n_symbols=self.n_symbols,
                 output_dim=self.embedding_dim,
-                mask_zero=self.embedding_mask_zero,
+                mask_zero=self.variable_length,
                 dropout=self.embedding_dropout)
         else:
-            value = input_object
+            return input_object
 
+    def _build_conv(self, value):
         if self.conv_filter_sizes:
+            if isinstance(self.conv_filter_sizes, dict):
+                # if only one dictionary is given, then treat it as a single
+                # layer
+                conv_filter_sizes = [self.conv_filter_sizes]
+            else:
+                conv_filter_sizes = self.conv_filter_sizes
             conv_weight_source = self.conv_weight_source
             if conv_weight_source is not None and isinstance(
                     conv_weight_source, SequenceInput):
                 conv_weight_source = conv_weight_source.build()[1]
-            for i in range(self.n_conv_layers):
-                value = aligned_convolutions(
-                    value,
-                    filter_sizes=self.conv_filter_sizes,
-                    output_dim=self.conv_output_dim,
-                    dropout=self.conv_dropout,
-                    batch_normalization=self.conv_batch_normalization,
-                    activation=self.conv_activation,
-                    weight_source=conv_weight_source)
-                # add max pooling for all layers before the last
-                if i + 1 < self.n_conv_layers:
-                    value = local_max_pooling(
-                        value,
-                        size=self.pool_size,
-                        stride=self.pool_stride)
 
-        if len(self.rnn_layer_sizes) > 0:
+            conv_layer_index = 0
+            n_conv_layers = self.repeat_conv_layers * len(conv_filter_sizes)
+            for _ in range(self.repeat_conv_layers):
+                for conv_layer_dict in conv_filter_sizes:
+                    if not isinstance(conv_layer_dict, dict):
+                        raise ValueError((
+                            "Each element of conv_filter_sizes must be a "
+                            "{width: num_filters} dictionary, "
+                            "got %s : %s instead." % (
+                                conv_layer_dict, type(conv_layer_dict))))
+                    value = aligned_convolutions(
+                        value,
+                        filter_sizes=list(conv_layer_dict.keys()),
+                        output_dim=conv_layer_dict,
+                        dropout=self.conv_dropout,
+                        batch_normalization=self.conv_batch_normalization,
+                        activation=self.conv_activation,
+                        weight_source=conv_weight_source)
+                    conv_layer_index += 1
+                    if conv_layer_index < n_conv_layers:
+                        # add max pooling for all layers before the last
+                        value = local_max_pooling(
+                            value,
+                            size=self.pool_size,
+                            stride=self.pool_stride)
+        return value
+
+    def _build_rnn(self, value):
+        if isinstance(self.rnn_layer_sizes, int):
+            rnn_layer_sizes = [self.rnn_layer_sizes]
+        else:
+            rnn_layer_sizes = self.rnn_layer_sizes
+
+        if len(rnn_layer_sizes) > 0:
             value = recurrent_layers(
                 value=value,
-                layer_sizes=self.rnn_layer_sizes,
+                layer_sizes=rnn_layer_sizes,
                 rnn_type=self.rnn_type,
                 bidirectional=self.rnn_bidirectional)
+        return value
 
+    def _build_global_pooling(self, value):
         if self.global_pooling:
             value = global_max_and_mean_pooling(
                 value,
                 batch_normalization=self.global_pooling_batch_normalization,
                 dropout=self.global_pooling_dropout)
+        return value
 
+    def _build_dense(self, value):
         if value.ndim > 2:
-            value = flatten(value)
+            value = flatten(value, drop_mask=self.variable_length)
 
         value = dense_layers(
             value,
@@ -292,7 +310,11 @@ class SequenceInput(Serializable):
             activation=self.dense_activation,
             dropout=self.dense_dropout,
             batch_normalization=self.dense_batch_normalization)
+        return value
 
+    def _build_highway(self, value):
+        if value.ndim > 2:
+            value = flatten(value, drop_mask=self.variable_length)
         if self.n_highway_layers:
             value = highway_layers(
                 value,
@@ -300,6 +322,17 @@ class SequenceInput(Serializable):
                 n_layers=self.n_highway_layers,
                 dropout=self.highway_dropout,
                 batch_normalization=self.highway_batch_normalization)
+        return value
+
+    def build(self):
+        input_object = self._build_input()
+        print(input_object, type(input_object))
+        value = self._build_embedding(input_object)
+        value = self._build_conv(value)
+        value = self._build_rnn(value)
+        value = self._build_global_pooling(value)
+        value = self._build_dense(value)
+        value = self._build_highway(value)
         return input_object, value
 
     def encode(self, peptides):

@@ -23,7 +23,9 @@ class MaskedGlobalMaxPooling1D(keras.layers.pooling._GlobalPooling1D):
     Returns a tensor of shape (n_samples, n_dims) after averaging across
     time in a mask-sensitive fashion.
     """
-    supports_masking = True
+    def __init__(self, **kwargs):
+        super(MaskedGlobalMaxPooling1D, self).__init__(**kwargs)
+        self.supports_masking = True
 
     def call(self, x, mask=None):
         if mask is None:

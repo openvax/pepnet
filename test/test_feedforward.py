@@ -1,25 +1,18 @@
-from pepnet.feed_forward import (
-    make_fixed_length_hotshot_network,
-    make_fixed_length_embedding_network
-)
-import numpy as np
+from pepnet import SequenceInput, Output, Predictor
 from nose.tools import eq_
 
 def test_fixed_length_hotshot():
-    model = make_fixed_length_hotshot_network(
-        peptide_length=9,
-        n_symbols=20)
-    x = np.array([
-        [0] * (9 * 20),
-        [1] * (9 * 20)
-    ])
-    y = model.predict(x)
+    model = Predictor(
+        inputs=SequenceInput(length=9, variable_length=False, encoding="onehot"),
+        outputs=Output(1, activation="sigmoid"))
+    seqs = ["A" * 9, "L" * 9]
+    y = model.predict(seqs)
     eq_(len(y), 2)
 
 def test_fixed_length_embedding_network():
-    model = make_fixed_length_embedding_network(
-        peptide_length=5,
-        n_symbols=20)
-    x = np.array([[1, 2, 3, 4, 5], [10, 11, 12, 13, 14]])
-    y = model.predict(x)
+    model = Predictor(
+        inputs=SequenceInput(length=9, variable_length=False, encoding="index"),
+        outputs=Output(1, activation="sigmoid"))
+    seqs = ["A" * 9, "L" * 9]
+    y = model.predict(seqs)
     eq_(len(y), 2)

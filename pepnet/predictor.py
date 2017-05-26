@@ -19,6 +19,7 @@ import numpy as np
 from keras.models import Model
 from keras.utils import plot_model
 from serializable import Serializable
+import ujson
 
 from .numeric_input import NumericInput
 from .sequence_input import SequenceInput
@@ -41,15 +42,34 @@ class Predictor(Serializable):
 
         if isinstance(inputs, (NumericInput, SequenceInput)):
             inputs = [inputs]
+        elif isinstance(inputs, dict):
+            inputs_dict = inputs
+            inputs = []
+            for (name, i) in sorted(inputs_dict.items()):
+                if i.name is None:
+                    i.name = name
+                elif i.name != name:
+                    raise ValueError("Input named '%s' given key '%s'" % (i.name, name))
+                inputs.append(i)
 
         if isinstance(outputs, (Output,)):
             outputs = [outputs]
-
-        self.inputs = inputs
+        elif isinstance(outputs, dict):
+            outputs_dict = outputs
+            outputs = []
+            for (name, o) in sorted(outputs_dict.items()):
+                if o.name is None:
+                    o.name = name
+                elif o.name != name:
+                    raise ValueError("Output named '%s' given key '%s'" % (o.name, name))
+                outputs.append(o)
 
         if len(outputs) > 1 and any(not o.name for o in outputs):
-            raise ValueError("All outputs must have names")
+            raise ValueError("Predictors with multiple outputs must have names for each output")
+        if len(outputs) > len({o.name for o in outputs}):
+            raise ValueError("All outputs must have distinct names")
 
+        self.inputs = inputs
         self.outputs = outputs
         self.merge_mode = merge_mode
         self.dense_layer_sizes = dense_layer_sizes
@@ -165,9 +185,11 @@ class Predictor(Serializable):
             output_graph = output_descriptor.build(hidden)
             output_dict[output_name] = output_graph
 
-        return Model(
-            inputs=[input_dict[name] for name in self.input_order],
-            outputs=[output_dict[name] for name in self.output_order])
+        inputs = [input_dict[name] for name in self.input_order]
+        print(inputs, [type(i) for i in inputs])
+        outputs = [output_dict[name] for name in self.output_order]
+        print(outputs, [type(o) for o in outputs])
+        return Model(inputs=inputs, outputs=outputs)
 
     def _compile(self, model):
         if self.use_output_dict:
@@ -192,6 +214,12 @@ class Predictor(Serializable):
     @property
     def num_outputs(self):
         return len(self.output_order)
+
+    ############################################################################
+    #
+    # Prediction
+    #
+    ############################################################################
 
     def _prepare_inputs(self, inputs):
         """
@@ -263,6 +291,22 @@ class Predictor(Serializable):
             return outputs
         else:
             return list(outputs.values())[0]
+
+    def predict_scores(self, inputs):
+        return self._prepare_outputs(
+            self.model.predict(self._prepare_inputs(inputs)),
+            decode=False)
+
+    def predict(self, inputs):
+        return self._prepare_outputs(
+            self.model.predict(self._prepare_inputs(inputs)),
+            decode=True)
+
+    ############################################################################
+    #
+    # Weight estimation
+    #
+    ############################################################################
 
     def _prepare_sample_weights(self, sample_weight):
         if sample_weight is not None:
@@ -344,15 +388,96 @@ class Predictor(Serializable):
             steps_per_epoch=steps_per_epoch,
             **kwargs)
 
-    def predict_scores(self, inputs):
-        return self._prepare_outputs(
-            self.model.predict(self._prepare_inputs(inputs)),
-            decode=False)
-
-    def predict(self, inputs):
-        return self._prepare_outputs(
-            self.model.predict(self._prepare_inputs(inputs)),
-            decode=True)
+    ############################################################################
+    #
+    # Model visualization
+    #
+    ############################################################################
 
     def save_diagram(self, filename="model.png"):
         plot_model(self.model, to_file=filename)
+
+    ############################################################################
+    #
+    # Serialization methods and related helpers
+    #
+    ############################################################################
+
+    def _input_to_repr(self, input_obj):
+        """
+        Return a serializable representation of an input.
+        """
+        return (input_obj.__class__.__name__, input_obj.to_dict())
+
+    @classmethod
+    def _input_from_repr(cls, input_repr):
+        """
+        Create an input from a flattened representation
+        """
+        name, config = input_repr
+        if name == "SequenceInput":
+            return SequenceInput.from_dict(config)
+        elif name == "NumericInput":
+            return NumericInput.from_dict(config)
+        else:
+            raise ValueError("Invalid input class: %s" % (name,))
+
+    def _output_to_repr(self, output_obj):
+        return (output_obj.__class__.__name__, output_obj.to_dict())
+
+    @classmethod
+    def _output_from_repr(self, output_repr):
+        name, config = output_repr
+        if name == "Output":
+            return Output.from_dict(config)
+        else:
+            raise ValueError("Invalid output name: %s" % (name,))
+
+    def get_weights(self):
+        return [w.get_value() for w in self.model.weights]
+
+    def set_weights(self, weights):
+        if len(self.model.weights) != len(weights):
+            raise ValueError("Expected %d weight arrays but got %d" % (
+                len(self.model.weights),
+                len(weights)))
+        for w_tensor, w_values in zip(self.model.weights, weights):
+            print(type(w_values))
+            if isinstance(w_values, str):
+                assert False
+            w_tensor.set_value(w_values.astype(w_tensor.dtype))
+
+    def to_dict(self):
+        return {
+            "inputs": [self._input_to_repr(i) for i in self.inputs],
+            "outputs": [self._output_to_repr(o) for o in self.outputs],
+            "merge_mode": self.merge_mode,
+            "dense_layer_sizes": self.dense_layer_sizes,
+            "dense_activation": self.dense_activation,
+            "dense_dropout": self.dense_dropout,
+            "dense_batch_normalization": self.dense_batch_normalization,
+            "optimizer": self.optimizer,
+            "training_metrics": self.training_metrics,
+            "model_weights": [w.tolist() for w in self.get_weights()]
+        }
+
+    @classmethod
+    def from_dict(self, config_dict):
+        model_weights_as_lists = config_dict.pop("model_weights")
+        model_weights = [np.array(values) for values in model_weights_as_lists]
+        input_reprs = config_dict.pop("inputs")
+        output_reprs = config_dict.pop("outputs")
+        inputs = [self._input_from_repr(i) for i in input_reprs]
+        outputs = [self._output_from_repr(o) for o in output_reprs]
+        print(config_dict.keys())
+        predictor = Predictor(inputs=inputs, outputs=outputs, **config_dict)
+        predictor.set_weights(model_weights)
+        return predictor
+
+    def to_json(self):
+        return ujson.dumps(self.to_dict())
+
+    @classmethod
+    def from_json(cls, json_string):
+        config_dict = ujson.loads(json_string)
+        return cls.from_dict(config_dict)
