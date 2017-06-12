@@ -22,19 +22,18 @@ class MaskedSlice(keras.layers.Lambda):
     Returns a tensor of shape (n_samples, n_dims) which are the first
     and last vectors in each sentence.
     """
-    supports_masking = True
-
     def __init__(
             self,
             time_start,
             time_end,
             *args,
             **kwargs):
+        super(MaskedSlice, self).__init__(*args, **kwargs)
         assert time_start >= 0
         assert time_end >= 0
         self.time_start = time_start
         self.time_end = time_end
-        super(MaskedSlice, self).__init__(*args, **kwargs)
+        self.supports_masking = True
 
     def call(self, x, mask):
         return x[:, self.time_start:self.time_end, :]

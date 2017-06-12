@@ -12,12 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# from keras.layers.convolutional import Conv1D
-# from keras.layers.pooling import (
-#    MaxPooling1D,
-#    GlobalMaxPooling1D,
-#    GlobalAveragePooling1D)
-
 from .keras_layers.masked_maxpooling1d import MaskedMaxPooling1D as MaxPooling1D
 from .keras_layers.masked_conv1d import MaskedConv1D as Conv1D
 from .keras_layers.masked_global_average_pooling import (
@@ -82,8 +76,10 @@ def merge(values, merge_mode):
     elif merge_mode == "multiply":
         return Multiply()(values)
 
-def flatten(value):
-    return Flatten()(DropMask()(value))
+def flatten(value, drop_mask=False):
+    if drop_mask:
+        value = DropMask()(value)
+    return Flatten()(value)
 
 def regularize(value, batch_normalization=False, dropout=0.0):
     if batch_normalization:
@@ -93,7 +89,12 @@ def regularize(value, batch_normalization=False, dropout=0.0):
     return value
 
 def embedding(
-        value, n_symbols, output_dim, dropout=0, initial_weights=None, mask_zero=True):
+        value,
+        n_symbols,
+        output_dim,
+        dropout=0,
+        initial_weights=None,
+        mask_zero=False):
     if initial_weights:
         n_rows, n_cols = initial_weights.shape
         if n_rows != n_symbols or n_cols != output_dim:
@@ -162,7 +163,7 @@ def conv(
             filter_size=filter_size,
             output_dim=output_dim,
             padding=padding)
-    if dropout:
+    if dropout > 0:
         # random drop some of the convolutional filters
         convolved = SpatialDropout1D(dropout)(convolved)
     return convolved
@@ -173,6 +174,7 @@ def aligned_convolutions(
         output_dim,
         activation="linear",
         dropout=0.0,
+        batch_normalization=False,
         weight_source=None):
     """
     Perform convolutions at multiple scales and concatenate their outputs.
@@ -194,18 +196,31 @@ def aligned_convolutions(
     """
     if isinstance(filter_sizes, int):
         filter_sizes = [filter_sizes]
+    if isinstance(output_dim, dict):
+        given_sizes = set(output_dim.keys())
+        if given_sizes != set(filter_sizes):
+            raise ValueError("Expected filter sizes %s but got %s" % (
+                set(filter_sizes), given_sizes))
+    else:
+        assert isinstance(output_dim, int)
+        output_dim = {size: output_dim for size in filter_sizes}
 
     convolved_list = []
     for size in filter_sizes:
         convolved_list.append(conv(
             value=value,
             filter_size=size,
-            output_dim=output_dim,
-            dropout=dropout,
+            output_dim=output_dim[size],
             padding="same",
             activation=activation,
-            weight_source=weight_source))
+            weight_source=weight_source,
+            dropout=0))
     convolved = merge(convolved_list, "concat")
+    if batch_normalization:
+        convolved = BatchNormalization()(convolved)
+    if dropout > 0:
+        # random drop some of the convolutional filters
+        convolved = SpatialDropout1D(dropout)(convolved)
     return convolved
 
 def local_max_pooling(value, size=3, stride=2):
@@ -327,3 +342,6 @@ def recurrent_layers(
             rnn_layer = Bidirectional(rnn_layer, merge_mode="concat")
         value = rnn_layer(value)
     return value
+
+def tensor_shape(x):
+    return K.int_shape(x)

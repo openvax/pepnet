@@ -16,7 +16,10 @@
 from keras.layers import Conv1D
 
 class MaskedConv1D(Conv1D):
-    supports_masking = True
+
+    def __init__(self, **kwargs):
+        super(MaskedConv1D, self).__init__(**kwargs)
+        self.supports_masking = True
 
     def compute_mask(self, inputs, mask=None):
         """Computes an output mask tensor.

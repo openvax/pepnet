@@ -17,7 +17,12 @@ from keras.layers import MaxPooling1D
 import keras.backend as K
 
 class MaskedMaxPooling1D(MaxPooling1D):
-    supports_masking = True
+    """
+    Max pooling over sequences that works with masked inputs.
+    """
+    def __init__(self, **kwargs):
+        super(MaskedMaxPooling1D, self).__init__(**kwargs)
+        self.supports_masking = True
 
     def compute_mask(self, inputs, mask=None):
         """Computes an output mask tensor.

@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .helpers import dense_layers, dense
+from .nn_helpers import dense_layers, dense
 from .numeric import Numeric
-from .losses import masked_mse
+from .losses import masked_mse, masked_binary_crossentropy
 
 class Output(Numeric):
     """
@@ -72,5 +72,7 @@ class Output(Numeric):
         """
         if self.loss == "mse":
             return masked_mse
+        elif self.loss == "binary_crossentropy":
+            return masked_binary_crossentropy
         else:
             raise ValueError("Only MSE supported, not '%s'" % self.loss)

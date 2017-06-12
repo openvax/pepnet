@@ -29,8 +29,21 @@ def positive_only_mse(y_true, y_pred):
     return K.mean(squared, axis=-1)
 
 def masked_mse(y_true, y_pred):
+    mask = T.isnan(y_true)
     diff = y_pred - y_true
     squared = K.square(diff)
-    return K.mean(
-        K.switch(T.isnan(y_true), 0.0, squared),
+    sum_squared_error = K.sum(
+        K.switch(mask, 0.0, squared),
         axis=-1)
+    n_valid_per_sample = K.sum(~mask, axis=-1)
+    return sum_squared_error / n_valid_per_sample
+
+def masked_binary_crossentropy(y_true, y_pred):
+    mask = T.isnan(y_true)
+    cross_entropy_values = K.binary_crossentropy(
+        output=y_pred,
+        target=y_true)
+    sum_cross_entropy_values = K.sum(
+        K.switch(mask, 0.0, cross_entropy_values), axis=-1)
+    n_valid_per_sample = K.sum(~mask, axis=-1)
+    return sum_cross_entropy_values / n_valid_per_sample

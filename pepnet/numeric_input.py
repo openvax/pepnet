@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .helpers import dense_layers, make_numeric_input
+from .nn_helpers import dense_layers, make_numeric_input
 from .numeric import Numeric
 
 class NumericInput(Numeric):

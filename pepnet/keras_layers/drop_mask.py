@@ -13,6 +13,7 @@
 # limitations under the License.
 
 from keras.layers import Layer
+import keras.backend as K
 
 class DropMask(Layer):
     """
@@ -21,10 +22,12 @@ class DropMask(Layer):
     In that case it can be useful to drop the sequence mask and feed the
     activations to a layer which does not support masking (e.g. Dense).
     """
-    supports_masking = True
+    def __init__(self, **kwargs):
+        super(DropMask, self).__init__(**kwargs)
+        self.supports_masking = True
 
     def call(self, x, mask=None):
-        return x
+        return K.identity(x)
 
     def compute_mask(self, x, mask=None):
         return None
