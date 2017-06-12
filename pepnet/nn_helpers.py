@@ -345,4 +345,3 @@ def recurrent_layers(
 
 def tensor_shape(x):
     return K.int_shape(x)
-

@@ -261,6 +261,8 @@ class SequenceInput(Serializable):
                             "{width: num_filters} dictionary, "
                             "got %s : %s instead." % (
                                 conv_layer_dict, type(conv_layer_dict))))
+                    elif len(conv_layer_dict) == 0:
+                        continue
                     value = aligned_convolutions(
                         value,
                         filter_sizes=list(conv_layer_dict.keys()),
