@@ -344,3 +344,16 @@ class SequenceInput(Serializable):
         else:
             return self.encoder.encode_onehot(
                 peptides, max_peptide_length=self.length)
+
+    @classmethod
+    def from_dict(cls, config_dict):
+        """
+        JSON serialization changes int keys of dictionaries to strings,
+        so convert those back to integers.
+        """
+        conv_filter_sizes_with_integer_keys = []
+        for layer_dictionary in config_dict.pop("conv_filter_sizes"):
+            conv_filter_sizes_with_integer_keys.append(
+                {int(k): int(v) for (k, v) in layer_dictionary.items()})
+        config_dict["conv_filter_sizes"] = conv_filter_sizes_with_integer_keys
+        return cls(**config_dict)

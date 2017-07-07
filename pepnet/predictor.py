@@ -490,3 +490,4 @@ class Predictor(Serializable):
             if len(s) == 0:
                 raise ValueError("File '%s' is empty" % filename)
             return cls.from_json(s)
+
