@@ -16,7 +16,7 @@ import os
 import logging
 import re
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 readme_dir = os.path.dirname(__file__)
 readme_filename = os.path.join(readme_dir, 'README.md')
@@ -53,7 +53,7 @@ if __name__ == '__main__':
         author_email="alex.rubinsteyn@mssm.edu",
         url="https://github.com/hammerlab/pepnet",
         license="http://www.apache.org/licenses/LICENSE-2.0.html",
-        packages=["pepnet", "pepnet.synthetic_data"],
+        packages=find_packages(),
         classifiers=[
             'Development Status :: 3 - Alpha',
             'Environment :: Console',
