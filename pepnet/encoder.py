@@ -15,6 +15,8 @@
 import numpy as np
 from collections import OrderedDict
 
+from typechecks import require_instance
+
 from .amino_acids import amino_acids_dict
 
 
@@ -133,6 +135,7 @@ class Encoder(object):
             self,
             peptides,
             max_peptide_length=None):
+        require_instance(peptides, (list, tuple, np.ndarray))
         if max_peptide_length is None:
             max_peptide_length = max(len(p) for p in peptides)
 
