@@ -1,5 +1,3 @@
-# Copyright (c) 2017. Mount Sinai School of Medicine
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -14,15 +12,16 @@
 
 from serializable import Serializable
 
-class Numeric(Serializable):
+class DiscreteInput(Serializable):
     """
     Base class for numeric input and output
     """
     def __init__(
             self,
-            dim,
+            choices,
+            dim=1,
             name=None,
-            dtype="float32",
+            representation="embedding",
             dense_layer_sizes=[],
             dense_activation="relu",
             dense_dropout=0,
@@ -32,14 +31,22 @@ class Numeric(Serializable):
         """
         Parameters
         ----------
+        choices : int, list of int, or list of str
+            If an integer, then indicates that choices numbers 0,...,choices-1,
+            otherwise expected list of all options.
+
         dim : int
             Number of input dimensions
 
         name : str
             Name of input sequence
 
-        dtype : str
-            Most common option is "float32" but might also be "int32"
+        representation : str
+            - "embedding" means use an embedding layer to represent each choice
+            as a learned vector
+
+            - "onehot" means represent each choice by setting a corresponding
+            position in a vector to 1, leaving all other entries as 0
 
         dense_layer_sizes : list of int
             Size of each dense layer after the input
@@ -54,25 +61,12 @@ class Numeric(Serializable):
             Use Batch Normalization after hidden layers
 
         dense_time_distributed : bool
-            Apply dense layer to each timestep of input (assumes input is 3D)
+            Apply dense layer to each input dimension separately
 
         transform : fn, optional
             Function to transform elements of numeric input/output
         """
-        self.name = name
-        self.dim = dim
-        self.dtype = dtype
-        self.dense_layer_sizes = dense_layer_sizes
-        self.dense_activation = dense_activation
-        self.dense_dropout = dense_dropout
-        self.dense_batch_normalization = dense_batch_normalization
-        self.dense_time_distributed = dense_time_distributed
-        self.transform = transform
-
-    def build(self):
-        raise NotImplementedError("Numeric cannot be directly instantiated")
-
-    def encode(self, x):
-        if self.transform:
-            return self.transform(x)
-        return x
+        if representation not in {"embedding", "onehot"}:
+            raise ValueError(
+                ("Invalid value '%s' for representation, "
+                    "must be 'embedding' or 'onehot'") % representation)

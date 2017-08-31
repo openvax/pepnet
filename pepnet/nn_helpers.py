@@ -38,7 +38,7 @@ from keras.layers import (
     GRU,
     Bidirectional
 )
-
+from keras.layers.wrappers import TimeDistributed
 import keras.backend as K
 import keras.initializers
 
@@ -250,15 +250,29 @@ def global_max_and_mean_pooling(
             batch_normalization=batch_normalization,
             dropout=dropout)], "concat")
 
-def dense(value, dim, activation, init="glorot_uniform", name=None):
+def dense(
+        value,
+        dim,
+        activation,
+        init="glorot_uniform",
+        name=None,
+        time_distributed=False):
     if name:
         # hidden layer fully connected layer
-        value = Dense(
-            units=dim, kernel_initializer=init, name="%s_dense" % name)(value)
-        value = Activation(activation, name=name)(value)
+        layer = Dense(
+            units=dim, kernel_initializer=init, name="%s_dense" % name)
+        if time_distributed:
+            assert value.ndim == 3, "Expected 3D value but got %dD: %s" % (
+                value.ndim, value)
+            layer = TimeDistributed(layer)
+        value = Activation(activation, name=name)(layer(value))
     else:
-        value = Dense(units=dim, kernel_initializer=init)(value)
-        value = Activation(activation)(value)
+        layer = Dense(units=dim, kernel_initializer=init)
+        if time_distributed:
+            assert value.ndim == 3, "Expected 3D value but got %dD: %s" % (
+                value.ndim, value)
+            layer = TimeDistributed(layer)
+        value = Activation(activation)(layer(value))
     return value
 
 def dense_layers(
@@ -267,7 +281,8 @@ def dense_layers(
         activation="relu",
         init="glorot_uniform",
         batch_normalization=False,
-        dropout=0.0):
+        dropout=0.0,
+        time_distributed=False):
     for i, dim in enumerate(layer_sizes):
         value = regularize(
             value=dense(value, dim=dim, init=init, activation=activation),
@@ -321,7 +336,8 @@ def recurrent_layers(
         layer_sizes,
         bidirectional=True,
         dropout=0.0,
-        rnn_type="lstm"):
+        rnn_type="lstm",
+        return_sequences=False):
     """
     Make one or more RNN layers
     """
@@ -336,7 +352,7 @@ def recurrent_layers(
         last_layer = (i == len(layer_sizes) - 1)
         rnn_layer = rnn_class(
             layer_size,
-            return_sequences=not last_layer,
+            return_sequences=return_sequences or not last_layer,
             dropout=dropout)
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer, merge_mode="concat")

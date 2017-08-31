@@ -1,5 +1,3 @@
-# Copyright (c) 2017. Mount Sinai School of Medicine
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -37,6 +35,7 @@ class SequenceInput(Serializable):
             encoding="index",
             add_start_tokens=False,
             add_stop_tokens=False,
+            return_sequences=False,
             # embedding
             embedding_dim=32,
             embedding_dropout=0,
@@ -53,6 +52,7 @@ class SequenceInput(Serializable):
             rnn_layer_sizes=[],
             rnn_type="lstm",
             rnn_bidirectional=True,
+
             # global pooling of conv or RNN outputs
             global_pooling=False,
             global_pooling_batch_normalization=False,
@@ -136,6 +136,10 @@ class SequenceInput(Serializable):
         rnn_bidirectional : bool
             Use bidirectional RNNs
 
+        return_sequences : bool
+            Should final output of RNN layers be same length as input sequence
+            or summarized to last output activation.
+
         global_pooling : bool
             Pool (mean & max) activations across sequence length
 
@@ -200,6 +204,7 @@ class SequenceInput(Serializable):
         self.rnn_layer_sizes = rnn_layer_sizes
         self.rnn_type = rnn_type
         self.rnn_bidirectional = rnn_bidirectional
+        self.return_sequences = return_sequences
 
         self.global_pooling = global_pooling
         self.global_pooling_batch_normalization = global_pooling_batch_normalization
@@ -291,7 +296,8 @@ class SequenceInput(Serializable):
                 value=value,
                 layer_sizes=rnn_layer_sizes,
                 rnn_type=self.rnn_type,
-                bidirectional=self.rnn_bidirectional)
+                bidirectional=self.rnn_bidirectional,
+                return_sequences=self.return_sequences)
         return value
 
     def _build_global_pooling(self, value):
@@ -303,7 +309,7 @@ class SequenceInput(Serializable):
         return value
 
     def _build_dense(self, value):
-        if value.ndim > 2:
+        if value.ndim > 2 and not self.return_sequences:
             value = flatten(value, drop_mask=self.variable_length)
 
         value = dense_layers(
@@ -315,7 +321,7 @@ class SequenceInput(Serializable):
         return value
 
     def _build_highway(self, value):
-        if value.ndim > 2:
+        if value.ndim > 2 and not self.return_sequences:
             value = flatten(value, drop_mask=self.variable_length)
         if self.n_highway_layers:
             value = highway_layers(

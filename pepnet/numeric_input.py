@@ -28,5 +28,6 @@ class NumericInput(Numeric):
             layer_sizes=self.dense_layer_sizes,
             activation=self.dense_activation,
             dropout=self.dense_dropout,
-            batch_normalization=self.dense_batch_normalization)
+            batch_normalization=self.dense_batch_normalization,
+            time_distributed=self.dense_time_distributed)
         return input_object, hidden
