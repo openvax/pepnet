@@ -31,6 +31,7 @@ class SequenceInput(Serializable):
             length,
             name=None,
             variable_length=False,
+            mask_zero=None,
             # embedding of symbol indices into vectors
             encoding="index",
             add_start_tokens=False,
@@ -183,11 +184,15 @@ class SequenceInput(Serializable):
         self.add_start_tokens = add_start_tokens
         self.add_stop_tokens = add_stop_tokens
         self.variable_length = variable_length
+
         self.encoder = Encoder(
             variable_length_sequences=self.variable_length,
             add_start_tokens=self.add_start_tokens,
             add_stop_tokens=self.add_stop_tokens)
         self.n_symbols = len(self.encoder.tokens)
+        if mask_zero is None:
+            mask_zero = variable_length
+        self.mask_zero = mask_zero
 
         self.embedding_dim = embedding_dim
         self.embedding_dropout = embedding_dropout
@@ -238,7 +243,7 @@ class SequenceInput(Serializable):
                 input_object,
                 n_symbols=self.n_symbols,
                 output_dim=self.embedding_dim,
-                mask_zero=self.variable_length,
+                mask_zero=self.mask_zero,
                 dropout=self.embedding_dropout)
         else:
             return input_object
@@ -310,7 +315,7 @@ class SequenceInput(Serializable):
 
     def _build_dense(self, value):
         if value.ndim > 2 and not self.return_sequences:
-            value = flatten(value, drop_mask=self.variable_length)
+            value = flatten(value, drop_mask=self.mask_zero)
 
         value = dense_layers(
             value,
@@ -322,7 +327,7 @@ class SequenceInput(Serializable):
 
     def _build_highway(self, value):
         if value.ndim > 2 and not self.return_sequences:
-            value = flatten(value, drop_mask=self.variable_length)
+            value = flatten(value, drop_mask=self.mask_zero)
         if self.n_highway_layers:
             value = highway_layers(
                 value,

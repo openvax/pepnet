@@ -125,6 +125,7 @@ class DiscreteInput(Numeric):
         self.embedding_dim = embedding_dim
         Numeric.__init__(
             self,
+            name=name,
             dim=1,
             dense_layer_sizes=dense_layer_sizes,
             dense_activation=dense_activation,
