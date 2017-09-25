@@ -7,7 +7,7 @@ def test_basic_rnn():
             name="x",
             length=4,
             variable_length=True,
-            encoding="index",
+            encoding="embedding",
             rnn_layer_sizes=[20],
             rnn_type="lstm",
             rnn_bidirectional=True),

@@ -190,12 +190,16 @@ class SequenceInput(Serializable):
         self.add_stop_tokens = add_stop_tokens
         self.variable_length = variable_length
 
+        self.add_normalized_position = add_normalized_position
+        self.add_normalized_centrality = add_normalized_centrality
+
         self.encoder = Encoder(
             variable_length_sequences=self.variable_length,
             add_start_tokens=self.add_start_tokens,
             add_stop_tokens=self.add_stop_tokens,
             add_normalized_position=add_normalized_position,
             add_normalized_centrality=add_normalized_centrality)
+
         self.n_symbols = len(self.encoder.tokens)
         if mask_zero is None:
             mask_zero = variable_length
@@ -236,7 +240,7 @@ class SequenceInput(Serializable):
 
     def _build_input(self):
         return make_sequence_input(
-            encoding=self.encoding,
+            encoding="index" if self.encoding == "embedding" else "feature",
             name=self.name,
             length=self.length + self.add_start_tokens + self.add_stop_tokens,
             n_symbols=self.n_symbols)

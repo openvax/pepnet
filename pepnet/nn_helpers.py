@@ -55,7 +55,7 @@ def make_index_sequence_input(name, length):
         name=name)
 
 def make_sequence_input(name, length, n_symbols, encoding):
-    assert encoding in {"onehot", "index"}
+    assert encoding in {"index", "feature"}, "Invalid encoding: '%s'" % encoding
     if encoding == "index":
         return make_index_sequence_input(name, length)
     else:

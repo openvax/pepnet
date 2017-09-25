@@ -15,6 +15,13 @@ from collections import OrderedDict
 
 from typechecks import require_instance
 
+from pepdata.amino_acid_alphabet import (
+    amino_acid_letter_indices,
+    canonical_amino_acid_letters
+)
+from pepdata.pmbec import pmbec_matrix
+from pepdata.blosum import blosum62_matrix
+
 from .amino_acids import amino_acids_dict
 
 
@@ -196,6 +203,8 @@ class Encoder(object):
         Encode a set of equal length peptides as a matrix of their
         amino acid indices.
         """
+        assert not self.add_normalized_centrality
+        assert not self.add_normalized_position
         peptides, max_peptide_length = self._validate_and_prepare_peptides(
             peptides, max_peptide_length)
         n_peptides = len(peptides)
@@ -206,8 +215,6 @@ class Encoder(object):
                 # we're expecting the token '-' to have index 0 so it's
                 # OK to only loop until the end of the given sequence
                 X_index[i, j] = index_dict[amino_acid]
-        assert not self.add_normalized_centrality
-        assert not self.add_normalized_position
         return X_index
 
     def _add_extra_features(self, X, peptides):
@@ -216,6 +223,7 @@ class Encoder(object):
         lengths = np.array([len(p) for p in peptides])
         n = len(X)
         max_length = lengths.max()
+
         X_centrality = np.zeros((n, max_length), dtype="float32")
         X_position = np.zeros((n, max_length), dtype="float32")
         for i, l in enumerate(lengths):
@@ -228,13 +236,48 @@ class Encoder(object):
             extra_arrays.append(X_centrality)
         if self.add_normalized_position:
             extra_arrays.append(X_position)
-        return np.hstack([X] + extra_arrays)
+        n_extra_dims = len(extra_arrays)
+        X_extra = np.hstack(extra_arrays).reshape((n, max_length, n_extra_dims))
+        return np.hstack([X, X_extra])
+
+    def _encode_from_pairwise_properties(
+            self, peptides, max_peptide_length, property_matrix):
+        peptides, max_peptide_length = self._validate_and_prepare_peptides(
+            peptides, max_peptide_length)
+        unique_amino_acids = set([])
+        for p in peptides:
+            unique_amino_acids.update(p)
+        for aa in unique_amino_acids:
+            if aa not in amino_acid_letter_indices:
+                raise ValueError("Invalid amino acid '%s', valid options: %s" % (
+                    aa, set(amino_acid_letter_indices.keys())))
+        X = np.zeros((len(peptides), max_peptide_length, 20), dtype="float32")
+        aa_to_feature_row = {}
+        canonical_amino_acid_indices = [
+            amino_acid_letter_indices[aa]
+            for aa in canonical_amino_acid_letters
+        ]
+        for aa in unique_amino_acids:
+            aa_idx = amino_acid_letter_indices[aa]
+            row = property_matrix[aa_idx, :]
+            row = row[canonical_amino_acid_indices]
+            aa_to_feature_row[aa] = row
+        for i, peptide in enumerate(peptides):
+            for j, amino_acid in enumerate(peptide):
+                X[i, j] = aa_to_feature_row[amino_acid]
+        return self._add_extra_features(X, peptides)
 
     def encode_pmbec(self, peptides, max_peptide_length=None):
-        pass
+        return self._encode_from_pairwise_properties(
+            peptides=peptides,
+            max_peptide_length=max_peptide_length,
+            property_matrix=pmbec_matrix)
 
     def encode_blosum(self, peptides, max_peptide_length=None):
-        pass
+        return self._encode_from_pairwise_properties(
+            peptides=peptides,
+            max_peptide_length=max_peptide_length,
+            property_matrix=blosum62_matrix)
 
     def encode_onehot(
             self,
@@ -289,4 +332,4 @@ class Encoder(object):
                 result[i, aa_idx] += alpha ** (l - j - 1)
                 if bidirectional:
                     result[i, n_symbols + aa_idx] += alpha ** j
-        return self.add_extra_features(result, peptides)
+        return result

@@ -11,7 +11,7 @@ def test_fixed_length_hotshot():
 
 def test_fixed_length_embedding_network():
     model = Predictor(
-        inputs=SequenceInput(length=9, variable_length=False, encoding="index"),
+        inputs=SequenceInput(length=9, variable_length=False, encoding="embedding"),
         outputs=Output(1, activation="sigmoid"))
     seqs = ["A" * 9, "L" * 9]
     y = model.predict(seqs)
