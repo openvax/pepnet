@@ -33,9 +33,11 @@ class SequenceInput(Serializable):
             variable_length=False,
             mask_zero=None,
             # embedding of symbol indices into vectors
-            encoding="index",
+            encoding="embedding",
             add_start_tokens=False,
             add_stop_tokens=False,
+            add_normalized_position=False,
+            add_normalized_centrality=False,
             return_sequences=False,
             # embedding
             embedding_dim=32,
@@ -81,9 +83,12 @@ class SequenceInput(Serializable):
         variable_length : bool
             Do we expect padding '-' characters in the input?
 
-        encoding : {"index", "onehot"}
-            How are symbols represented: via integer indices or boolean
-            vectors?
+        encoding : {"embedding", "onehot", "blosum", "pmbec"}
+            How are symbols represented?
+                - embedding: learned vector embedding
+                - onehot: binary vector
+                - blosum62: rows of BLOSUM62 matrix
+                - pmbec: rows of PMBEC matrix
 
         add_start_tokens : bool
             Add "^" token to start of each sequence
@@ -178,7 +183,7 @@ class SequenceInput(Serializable):
         """
         self.name = name
         self.length = length
-        if encoding not in {"index", "onehot"}:
+        if encoding not in {"embedding", "onehot", "blosum", "pmbec"}:
             raise ValueError("Invalid encoding: %s" % encoding)
         self.encoding = encoding
         self.add_start_tokens = add_start_tokens
@@ -188,7 +193,9 @@ class SequenceInput(Serializable):
         self.encoder = Encoder(
             variable_length_sequences=self.variable_length,
             add_start_tokens=self.add_start_tokens,
-            add_stop_tokens=self.add_stop_tokens)
+            add_stop_tokens=self.add_stop_tokens,
+            add_normalized_position=add_normalized_position,
+            add_normalized_centrality=add_normalized_centrality)
         self.n_symbols = len(self.encoder.tokens)
         if mask_zero is None:
             mask_zero = variable_length
@@ -235,7 +242,7 @@ class SequenceInput(Serializable):
             n_symbols=self.n_symbols)
 
     def _build_embedding(self, input_object):
-        if self.encoding == "index":
+        if self.encoding == "embedding":
             if self.embedding_dim <= 0:
                 raise ValueError(
                     "Invalid embedding dim: %d" % self.embedding_dim)
@@ -348,13 +355,15 @@ class SequenceInput(Serializable):
         return input_object, value
 
     def encode(self, peptides):
-        if self.encoding == "index":
-            return self.encoder.encode_index_array(
-                peptides,
-                max_peptide_length=self.length)
-        else:
-            return self.encoder.encode_onehot(
-                peptides, max_peptide_length=self.length)
+        if self.encoding == "embedding":
+            fn = self.encoder.encode_index_array
+        elif self.encoding == "onehot":
+            fn = self.encoder.encode_onehot
+        elif self.encoding == "pmbec":
+            fn = self.encoder.encode_pmbec
+        elif self.encoding == "blosum":
+            fn = self.encoder.encode_blosum
+        return fn(peptides, max_peptide_length=self.length)
 
     @classmethod
     def from_dict(cls, config_dict):

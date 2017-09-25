@@ -31,7 +31,9 @@ class Encoder(object):
             amino_acid_alphabet=amino_acids_dict,
             variable_length_sequences=True,
             add_start_tokens=False,
-            add_stop_tokens=False):
+            add_stop_tokens=False,
+            add_normalized_position=False,
+            add_normalized_centrality=False):
         """
         Parameters
         ----------
@@ -47,6 +49,16 @@ class Encoder(object):
 
         add_stop_tokens : bool
             End each peptide string with "$"
+
+        add_normalized_position : bool
+            Extend the representation of each residue with where it is in
+            the sequence from left-to-right (scaled to be between 0 and 1)
+
+        add_normalized_centrality : bool
+            Extend the representation of each residue with how close it is
+            to the center. 0 represents left and right edges of the sequence,
+            1.0 represents the center.
+
         """
         self._tokens_to_names = OrderedDict()
         self._index_dict = {}
@@ -55,6 +67,8 @@ class Encoder(object):
         self.variable_length_sequences = variable_length_sequences
         self.add_start_tokens = add_start_tokens
         self.add_stop_tokens = add_stop_tokens
+        self.add_normalized_position = add_normalized_position
+        self.add_normalized_centrality = add_normalized_centrality
 
         if self.variable_length_sequences:
             self._add_token("-", "Gap")
@@ -192,7 +206,35 @@ class Encoder(object):
                 # we're expecting the token '-' to have index 0 so it's
                 # OK to only loop until the end of the given sequence
                 X_index[i, j] = index_dict[amino_acid]
+        assert not self.add_normalized_centrality
+        assert not self.add_normalized_position
         return X_index
+
+    def _add_extra_features(self, X, peptides):
+        if not self.add_normalized_position and not self.add_normalized_centrality:
+            return X
+        lengths = np.array([len(p) for p in peptides])
+        n = len(X)
+        max_length = lengths.max()
+        X_centrality = np.zeros((n, max_length), dtype="float32")
+        X_position = np.zeros((n, max_length), dtype="float32")
+        for i, l in enumerate(lengths):
+            center = (l - 1) / 2
+            vec = np.arange(l)
+            X_centrality[i, :l] = (vec - center).abs() / center
+            X_position[i, :] = vec / l
+        extra_arrays = []
+        if self.add_normalized_centrality:
+            extra_arrays.append(X_centrality)
+        if self.add_normalized_position:
+            extra_arrays.append(X_position)
+        return np.hstack([X] + extra_arrays)
+
+    def encode_pmbec(self, peptides, max_peptide_length=None):
+        pass
+
+    def encode_blosum(self, peptides, max_peptide_length=None):
+        pass
 
     def encode_onehot(
             self,
@@ -211,7 +253,7 @@ class Encoder(object):
         for i, peptide in enumerate(peptides):
             for j, amino_acid in enumerate(peptide):
                 X[i, j, index_dict[amino_acid]] = 1
-        return X
+        return self._add_extra_features(X, peptides)
 
     def encode_FOFE(self, peptides, alpha=0.7, bidirectional=False):
         """
@@ -247,4 +289,4 @@ class Encoder(object):
                 result[i, aa_idx] += alpha ** (l - j - 1)
                 if bidirectional:
                     result[i, n_symbols + aa_idx] += alpha ** j
-        return result
+        return self.add_extra_features(result, peptides)

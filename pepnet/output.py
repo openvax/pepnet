@@ -23,6 +23,7 @@ class Output(Numeric):
             dim=1,
             activation="linear",
             name=None,
+            dropout=0,
             loss="mse",
             dense_layer_sizes=[],
             dense_activation="relu",
@@ -44,6 +45,7 @@ class Output(Numeric):
         self.activation = activation
         self.loss = loss
         self.inverse_transform = inverse_transform
+        self.dropout = dropout
 
     def build(self, value):
         hidden = dense_layers(

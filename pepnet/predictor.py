@@ -199,7 +199,7 @@ class Predictor(Serializable):
 
     def _build_and_compile(self):
         if self.num_inputs == 0:
-            raise ValueError("Predictor must have at least one output")
+            raise ValueError("Predictor must have at least one input")
         model = self._build()
         self._compile(model)
         return model
@@ -268,8 +268,9 @@ class Predictor(Serializable):
                 in enumerate(self.output_order)
             }
         elif not isinstance(outputs, dict):
-            raise ValueError("Expected outputs to list, array, or dict, got %s" % (
-                type(outputs)))
+            raise ValueError(
+                ("Expected outputs to be of type list, array, or dict -- "
+                 "got %s (value=%s)" % (type(outputs), outputs)))
         if encode:
             outputs = {
                 name: output.encode(outputs[name])
