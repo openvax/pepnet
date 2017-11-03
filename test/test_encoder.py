@@ -69,3 +69,27 @@ def test_encoder_onehot():
     x = encoder.encode_onehot(["AAA", "SSS", "EEE"])
     eq_(x.shape, (3, 3, 20))
 
+def test_encoder_blosum_with_positional_features():
+    encoder = Encoder(
+        variable_length_sequences=False,
+        add_normalized_position=True,
+        add_normalized_centrality=True)
+    x = encoder.encode_blosum(["AAA", "SSS", "EEE"])
+    eq_(x.shape, (3, 3, 22))
+
+def test_encoder_pmbec_with_positional_features():
+    encoder = Encoder(
+        variable_length_sequences=False,
+        add_normalized_position=True,
+        add_normalized_centrality=True)
+    x = encoder.encode_pmbec(["AAA", "SSS", "EEE"])
+    eq_(x.shape, (3, 3, 22))
+
+def test_encoder_onehot_with_positional_features():
+    encoder = Encoder(
+        variable_length_sequences=False,
+        add_normalized_position=True,
+        add_normalized_centrality=True)
+    x = encoder.encode_onehot(["AAA", "SSS", "EEE"])
+    eq_(x.shape, (3, 3, 22))
+

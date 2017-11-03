@@ -42,9 +42,9 @@ from keras.layers.wrappers import TimeDistributed
 import keras.backend as K
 import keras.initializers
 
-def make_onehot_sequence_input(name, length, n_symbols):
+def make_vector_sequence_input(name, length, n_dims):
     return Input(
-            shape=(length, n_symbols),
+            shape=(length, n_dims),
             name=name,
             dtype="float32")
 
@@ -59,7 +59,7 @@ def make_sequence_input(name, length, n_symbols, encoding):
     if encoding == "index":
         return make_index_sequence_input(name, length)
     else:
-        return make_onehot_sequence_input(name, length, n_symbols)
+        return make_vector_sequence_input(name, length, n_symbols)
 
 def make_numeric_input(name, dim, dtype):
     return Input(name=name, shape=(dim,), dtype=dtype)

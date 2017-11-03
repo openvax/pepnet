@@ -15,7 +15,8 @@ from serializable import Serializable
 from .nn_helpers import (
     aligned_convolutions,
     embedding,
-    make_sequence_input,
+    make_vector_sequence_input,
+    make_index_sequence_input,
     local_max_pooling,
     global_max_and_mean_pooling,
     flatten,
@@ -33,7 +34,7 @@ class SequenceInput(Serializable):
             variable_length=False,
             mask_zero=None,
             # embedding of symbol indices into vectors
-            encoding="embedding",
+            encoding="onehot",
             add_start_tokens=False,
             add_stop_tokens=False,
             add_normalized_position=False,
@@ -189,6 +190,8 @@ class SequenceInput(Serializable):
         self.add_start_tokens = add_start_tokens
         self.add_stop_tokens = add_stop_tokens
         self.variable_length = variable_length
+        self.padded_length = (
+            self.length + self.add_start_tokens + self.add_stop_tokens)
 
         self.add_normalized_position = add_normalized_position
         self.add_normalized_centrality = add_normalized_centrality
@@ -201,8 +204,20 @@ class SequenceInput(Serializable):
             add_normalized_centrality=add_normalized_centrality)
 
         self.n_symbols = len(self.encoder.tokens)
+        self.extra_input_dims = (
+             int(add_normalized_position) +
+            int(add_normalized_centrality))
+        if self.encoding == "embedding":
+            self.n_input_dims = None
+            assert self.extra_input_dims is None
+        elif self.encoding == "onehot":
+            self.n_input_dims = self.n_symbols + self.extra_input_dims
+        else:
+            self.n_input_dims = 20 + self.extra_input_dims
+
         if mask_zero is None:
             mask_zero = variable_length
+
         self.mask_zero = mask_zero
 
         self.embedding_dim = embedding_dim
@@ -239,11 +254,15 @@ class SequenceInput(Serializable):
         self.highway_activation = highway_activation
 
     def _build_input(self):
-        return make_sequence_input(
-            encoding="index" if self.encoding == "embedding" else "feature",
-            name=self.name,
-            length=self.length + self.add_start_tokens + self.add_stop_tokens,
-            n_symbols=self.n_symbols)
+        if self.encoding == "embedding":
+            return make_index_sequence_input(
+                name=self.name, length=self.padded_length)
+        else:
+            return make_vector_sequence_input(
+                name=self.name,
+                length=self.padded_length,
+                n_dims=self.n_input_dims)
+
 
     def _build_embedding(self, input_object):
         if self.encoding == "embedding":
@@ -282,23 +301,38 @@ class SequenceInput(Serializable):
                             "{width: num_filters} dictionary, "
                             "got %s : %s instead." % (
                                 conv_layer_dict, type(conv_layer_dict))))
-                    elif len(conv_layer_dict) == 0:
+                    pool_size = conv_layer_dict.pop("pool_size", self.pool_size)
+                    pool_stride = conv_layer_dict.pop(
+                        "pool_stride", self.pool_stride)
+                    batch_normalization = conv_layer_dict.pop(
+                        "batch_normalization", self.conv_batch_normalization)
+                    activation = conv_layer_dict.pop(
+                        "activation", self.conv_activation)
+                    dropout = conv_layer_dict.pop("dropout", self.conv_dropout)
+                    maxpooling = (pool_size > 1) or (pool_stride > 1)
+
+                    if len(conv_layer_dict) == 0:
+                        # if no convolution sizes specified in this layer, then
+                        # skip it
                         continue
+
                     value = aligned_convolutions(
                         value,
                         filter_sizes=list(conv_layer_dict.keys()),
                         output_dim=conv_layer_dict,
-                        dropout=self.conv_dropout,
-                        batch_normalization=self.conv_batch_normalization,
-                        activation=self.conv_activation,
+                        dropout=dropout,
+                        batch_normalization=batch_normalization,
+                        activation=activation,
                         weight_source=conv_weight_source)
+
                     conv_layer_index += 1
-                    if conv_layer_index < n_conv_layers:
+
+                    if maxpooling and (conv_layer_index < n_conv_layers):
                         # add max pooling for all layers before the last
                         value = local_max_pooling(
                             value,
-                            size=self.pool_size,
-                            stride=self.pool_stride)
+                            size=pool_size,
+                            stride=pool_stride)
         return value
 
     def _build_rnn(self, value):

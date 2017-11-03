@@ -14,18 +14,16 @@ import numpy as np
 from collections import OrderedDict
 
 from typechecks import require_instance
-
+from serializable import Serializable
 from pepdata.amino_acid_alphabet import (
     amino_acid_letter_indices,
-    canonical_amino_acid_letters
+    canonical_amino_acids
 )
 from pepdata.pmbec import pmbec_matrix
 from pepdata.blosum import blosum62_matrix
 
-from .amino_acids import amino_acids_dict
 
-
-class Encoder(object):
+class Encoder(Serializable):
     """
     Container for mapping between amino acid letter codes and their full names
     and providing index/hotshot encodings of amino acid sequences.
@@ -35,7 +33,7 @@ class Encoder(object):
     """
     def __init__(
             self,
-            amino_acid_alphabet=amino_acids_dict,
+            amino_acid_alphabet=canonical_amino_acids,
             variable_length_sequences=True,
             add_start_tokens=False,
             add_stop_tokens=False,
@@ -86,8 +84,8 @@ class Encoder(object):
         if self.add_stop_tokens:
             self._add_token("$", "Stop")
 
-        for (k, v) in amino_acid_alphabet.items():
-            self._add_token(k, v)
+        for aa in amino_acid_alphabet:
+            self._add_token(aa.letter, aa.full_name)
 
     def _add_token(self, token, name):
         assert len(token) == 1, "Invalid token '%s'" % (token,)
@@ -163,7 +161,7 @@ class Encoder(object):
             if max_observed_length > max_peptide_length:
                 example = [p for p in peptides if len(p) == max_observed_length][0]
                 raise ValueError(
-                    "Can't have peptide(s) of length %d and max_peptide_length = %d (example '%s')" % (
+                    "Peptide(s) of length %d when max = %d (example '%s')" % (
                         max_observed_length,
                         max_peptide_length,
                         example))
@@ -229,42 +227,40 @@ class Encoder(object):
         for i, l in enumerate(lengths):
             center = (l - 1) / 2
             vec = np.arange(l)
-            X_centrality[i, :l] = (vec - center).abs() / center
+            X_centrality[i, :l] = np.abs(vec - center) / center
             X_position[i, :] = vec / l
         extra_arrays = []
         if self.add_normalized_centrality:
             extra_arrays.append(X_centrality)
         if self.add_normalized_position:
             extra_arrays.append(X_position)
-        n_extra_dims = len(extra_arrays)
-        X_extra = np.hstack(extra_arrays).reshape((n, max_length, n_extra_dims))
-        return np.hstack([X, X_extra])
+        return np.dstack([X] + extra_arrays)
 
     def _encode_from_pairwise_properties(
             self, peptides, max_peptide_length, property_matrix):
         peptides, max_peptide_length = self._validate_and_prepare_peptides(
             peptides, max_peptide_length)
-        unique_amino_acids = set([])
-        for p in peptides:
-            unique_amino_acids.update(p)
-        for aa in unique_amino_acids:
-            if aa not in amino_acid_letter_indices:
-                raise ValueError("Invalid amino acid '%s', valid options: %s" % (
-                    aa, set(amino_acid_letter_indices.keys())))
-        X = np.zeros((len(peptides), max_peptide_length, 20), dtype="float32")
+        n_peptides = len(peptides)
+        shape = (n_peptides, max_peptide_length, 20)
+        X = np.zeros(shape, dtype="float32")
         aa_to_feature_row = {}
-        canonical_amino_acid_indices = [
-            amino_acid_letter_indices[aa]
-            for aa in canonical_amino_acid_letters
+        alphabet_indices = [
+            amino_acid_letter_indices[aa.letter]
+            for aa in self.amino_acid_alphabet
         ]
-        for aa in unique_amino_acids:
-            aa_idx = amino_acid_letter_indices[aa]
+        for aa in self.amino_acid_alphabet:
+            aa_idx = amino_acid_letter_indices[aa.letter]
             row = property_matrix[aa_idx, :]
-            row = row[canonical_amino_acid_indices]
-            aa_to_feature_row[aa] = row
+            row = row[alphabet_indices]
+            aa_to_feature_row[aa.letter] = row
+
+        # add zero vectors for gap, start and stop tokens
+        for token in ["-", "^", "$"]:
+            aa_to_feature_row[token] = np.zeros(
+                len(alphabet_indices), dtype="float32")
         for i, peptide in enumerate(peptides):
             for j, amino_acid in enumerate(peptide):
-                X[i, j] = aa_to_feature_row[amino_acid]
+                X[i, j, :] = aa_to_feature_row[amino_acid]
         return self._add_extra_features(X, peptides)
 
     def encode_pmbec(self, peptides, max_peptide_length=None):
