@@ -27,6 +27,7 @@ class Numeric(Serializable):
             dense_activation="relu",
             dense_dropout=0,
             dense_batch_normalization=False,
+            dense_time_distributed=False,
             transform=None):
         """
         Parameters
@@ -52,6 +53,9 @@ class Numeric(Serializable):
         dense_batch_normalization : bool
             Use Batch Normalization after hidden layers
 
+        dense_time_distributed : bool
+            Apply dense layer to each timestep of input (assumes input is 3D)
+
         transform : fn, optional
             Function to transform elements of numeric input/output
         """
@@ -62,6 +66,7 @@ class Numeric(Serializable):
         self.dense_activation = dense_activation
         self.dense_dropout = dense_dropout
         self.dense_batch_normalization = dense_batch_normalization
+        self.dense_time_distributed = dense_time_distributed
         self.transform = transform
 
     def build(self):

@@ -1,5 +1,3 @@
-# Copyright (c) 2017. Mount Sinai School of Medicine
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -23,6 +21,7 @@ import ujson
 
 from .numeric_input import NumericInput
 from .sequence_input import SequenceInput
+from .discrete_input import DiscreteInput
 from .output import Output
 from .nn_helpers import merge, dense_layers, tensor_shape
 
@@ -40,7 +39,7 @@ class Predictor(Serializable):
             optimizer="rmsprop",
             training_metrics=[]):
 
-        if isinstance(inputs, (NumericInput, SequenceInput)):
+        if isinstance(inputs, (NumericInput, SequenceInput, DiscreteInput)):
             inputs = [inputs]
         elif isinstance(inputs, dict):
             inputs_dict = inputs
@@ -200,7 +199,7 @@ class Predictor(Serializable):
 
     def _build_and_compile(self):
         if self.num_inputs == 0:
-            raise ValueError("Predictor must have at least one output")
+            raise ValueError("Predictor must have at least one input")
         model = self._build()
         self._compile(model)
         return model
@@ -269,8 +268,9 @@ class Predictor(Serializable):
                 in enumerate(self.output_order)
             }
         elif not isinstance(outputs, dict):
-            raise ValueError("Expected outputs to list, array, or dict, got %s" % (
-                type(outputs)))
+            raise ValueError(
+                ("Expected outputs to be of type list, array, or dict -- "
+                 "got %s (value=%s)" % (type(outputs), outputs)))
         if encode:
             outputs = {
                 name: output.encode(outputs[name])
@@ -417,6 +417,8 @@ class Predictor(Serializable):
             return SequenceInput.from_dict(config)
         elif name == "NumericInput":
             return NumericInput.from_dict(config)
+        elif name == "DiscreteInput":
+            return DiscreteInput.from_dict(config)
         else:
             raise ValueError("Invalid input class: %s" % (name,))
 

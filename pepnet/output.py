@@ -1,5 +1,3 @@
-# Copyright (c) 2017. Mount Sinai School of Medicine
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,7 +10,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .nn_helpers import dense_layers, dense
+from .nn_helpers import dense_layers, dense, flatten
 from .numeric import Numeric
 from .losses import masked_mse, masked_binary_crossentropy
 
@@ -25,11 +23,13 @@ class Output(Numeric):
             dim=1,
             activation="linear",
             name=None,
+            dropout=0,
             loss="mse",
             dense_layer_sizes=[],
             dense_activation="relu",
             dense_dropout=0,
             dense_batch_normalization=False,
+            dense_time_distributed=False,
             transform=None,
             inverse_transform=None):
         Numeric.__init__(
@@ -40,10 +40,12 @@ class Output(Numeric):
             dense_activation=dense_activation,
             dense_dropout=dense_dropout,
             dense_batch_normalization=dense_batch_normalization,
+            dense_time_distributed=dense_time_distributed,
             transform=transform)
         self.activation = activation
         self.loss = loss
         self.inverse_transform = inverse_transform
+        self.dropout = dropout
 
     def build(self, value):
         hidden = dense_layers(
@@ -51,7 +53,10 @@ class Output(Numeric):
             layer_sizes=self.dense_layer_sizes,
             activation=self.dense_activation,
             dropout=self.dense_dropout,
-            batch_normalization=self.dense_batch_normalization)
+            batch_normalization=self.dense_batch_normalization,
+            time_distributed=self.dense_time_distributed)
+        if hidden.ndim > 2:
+            hidden = flatten(hidden, drop_mask=True)
         output = dense(
             hidden,
             dim=self.dim,

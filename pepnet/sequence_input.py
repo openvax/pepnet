@@ -1,5 +1,3 @@
-# Copyright (c) 2017. Mount Sinai School of Medicine
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -17,7 +15,8 @@ from serializable import Serializable
 from .nn_helpers import (
     aligned_convolutions,
     embedding,
-    make_sequence_input,
+    make_vector_sequence_input,
+    make_index_sequence_input,
     local_max_pooling,
     global_max_and_mean_pooling,
     flatten,
@@ -33,10 +32,14 @@ class SequenceInput(Serializable):
             length,
             name=None,
             variable_length=False,
+            mask_zero=None,
             # embedding of symbol indices into vectors
-            encoding="index",
+            encoding="onehot",
             add_start_tokens=False,
             add_stop_tokens=False,
+            add_normalized_position=False,
+            add_normalized_centrality=False,
+            return_sequences=False,
             # embedding
             embedding_dim=32,
             embedding_dropout=0,
@@ -53,6 +56,7 @@ class SequenceInput(Serializable):
             rnn_layer_sizes=[],
             rnn_type="lstm",
             rnn_bidirectional=True,
+
             # global pooling of conv or RNN outputs
             global_pooling=False,
             global_pooling_batch_normalization=False,
@@ -80,9 +84,12 @@ class SequenceInput(Serializable):
         variable_length : bool
             Do we expect padding '-' characters in the input?
 
-        encoding : {"index", "onehot"}
-            How are symbols represented: via integer indices or boolean
-            vectors?
+        encoding : {"embedding", "onehot", "blosum", "pmbec"}
+            How are symbols represented?
+                - embedding: learned vector embedding
+                - onehot: binary vector
+                - blosum62: rows of BLOSUM62 matrix
+                - pmbec: rows of PMBEC matrix
 
         add_start_tokens : bool
             Add "^" token to start of each sequence
@@ -136,6 +143,10 @@ class SequenceInput(Serializable):
         rnn_bidirectional : bool
             Use bidirectional RNNs
 
+        return_sequences : bool
+            Should final output of RNN layers be same length as input sequence
+            or summarized to last output activation.
+
         global_pooling : bool
             Pool (mean & max) activations across sequence length
 
@@ -173,17 +184,41 @@ class SequenceInput(Serializable):
         """
         self.name = name
         self.length = length
-        if encoding not in {"index", "onehot"}:
+        if encoding not in {"embedding", "onehot", "blosum", "pmbec"}:
             raise ValueError("Invalid encoding: %s" % encoding)
         self.encoding = encoding
         self.add_start_tokens = add_start_tokens
         self.add_stop_tokens = add_stop_tokens
         self.variable_length = variable_length
+        self.padded_length = (
+            self.length + self.add_start_tokens + self.add_stop_tokens)
+
+        self.add_normalized_position = add_normalized_position
+        self.add_normalized_centrality = add_normalized_centrality
+
         self.encoder = Encoder(
             variable_length_sequences=self.variable_length,
             add_start_tokens=self.add_start_tokens,
-            add_stop_tokens=self.add_stop_tokens)
+            add_stop_tokens=self.add_stop_tokens,
+            add_normalized_position=add_normalized_position,
+            add_normalized_centrality=add_normalized_centrality)
+
         self.n_symbols = len(self.encoder.tokens)
+        self.extra_input_dims = (
+             int(add_normalized_position) +
+            int(add_normalized_centrality))
+        if self.encoding == "embedding":
+            self.n_input_dims = None
+            assert self.extra_input_dims is None
+        elif self.encoding == "onehot":
+            self.n_input_dims = self.n_symbols + self.extra_input_dims
+        else:
+            self.n_input_dims = 20 + self.extra_input_dims
+
+        if mask_zero is None:
+            mask_zero = variable_length
+
+        self.mask_zero = mask_zero
 
         self.embedding_dim = embedding_dim
         self.embedding_dropout = embedding_dropout
@@ -200,6 +235,7 @@ class SequenceInput(Serializable):
         self.rnn_layer_sizes = rnn_layer_sizes
         self.rnn_type = rnn_type
         self.rnn_bidirectional = rnn_bidirectional
+        self.return_sequences = return_sequences
 
         self.global_pooling = global_pooling
         self.global_pooling_batch_normalization = global_pooling_batch_normalization
@@ -218,14 +254,18 @@ class SequenceInput(Serializable):
         self.highway_activation = highway_activation
 
     def _build_input(self):
-        return make_sequence_input(
-            encoding=self.encoding,
-            name=self.name,
-            length=self.length + self.add_start_tokens + self.add_stop_tokens,
-            n_symbols=self.n_symbols)
+        if self.encoding == "embedding":
+            return make_index_sequence_input(
+                name=self.name, length=self.padded_length)
+        else:
+            return make_vector_sequence_input(
+                name=self.name,
+                length=self.padded_length,
+                n_dims=self.n_input_dims)
+
 
     def _build_embedding(self, input_object):
-        if self.encoding == "index":
+        if self.encoding == "embedding":
             if self.embedding_dim <= 0:
                 raise ValueError(
                     "Invalid embedding dim: %d" % self.embedding_dim)
@@ -233,7 +273,7 @@ class SequenceInput(Serializable):
                 input_object,
                 n_symbols=self.n_symbols,
                 output_dim=self.embedding_dim,
-                mask_zero=self.variable_length,
+                mask_zero=self.mask_zero,
                 dropout=self.embedding_dropout)
         else:
             return input_object
@@ -261,23 +301,38 @@ class SequenceInput(Serializable):
                             "{width: num_filters} dictionary, "
                             "got %s : %s instead." % (
                                 conv_layer_dict, type(conv_layer_dict))))
-                    elif len(conv_layer_dict) == 0:
+                    pool_size = conv_layer_dict.pop("pool_size", self.pool_size)
+                    pool_stride = conv_layer_dict.pop(
+                        "pool_stride", self.pool_stride)
+                    batch_normalization = conv_layer_dict.pop(
+                        "batch_normalization", self.conv_batch_normalization)
+                    activation = conv_layer_dict.pop(
+                        "activation", self.conv_activation)
+                    dropout = conv_layer_dict.pop("dropout", self.conv_dropout)
+                    maxpooling = (pool_size > 1) or (pool_stride > 1)
+
+                    if len(conv_layer_dict) == 0:
+                        # if no convolution sizes specified in this layer, then
+                        # skip it
                         continue
+
                     value = aligned_convolutions(
                         value,
                         filter_sizes=list(conv_layer_dict.keys()),
                         output_dim=conv_layer_dict,
-                        dropout=self.conv_dropout,
-                        batch_normalization=self.conv_batch_normalization,
-                        activation=self.conv_activation,
+                        dropout=dropout,
+                        batch_normalization=batch_normalization,
+                        activation=activation,
                         weight_source=conv_weight_source)
+
                     conv_layer_index += 1
-                    if conv_layer_index < n_conv_layers:
+
+                    if maxpooling and (conv_layer_index < n_conv_layers):
                         # add max pooling for all layers before the last
                         value = local_max_pooling(
                             value,
-                            size=self.pool_size,
-                            stride=self.pool_stride)
+                            size=pool_size,
+                            stride=pool_stride)
         return value
 
     def _build_rnn(self, value):
@@ -291,7 +346,8 @@ class SequenceInput(Serializable):
                 value=value,
                 layer_sizes=rnn_layer_sizes,
                 rnn_type=self.rnn_type,
-                bidirectional=self.rnn_bidirectional)
+                bidirectional=self.rnn_bidirectional,
+                return_sequences=self.return_sequences)
         return value
 
     def _build_global_pooling(self, value):
@@ -303,8 +359,8 @@ class SequenceInput(Serializable):
         return value
 
     def _build_dense(self, value):
-        if value.ndim > 2:
-            value = flatten(value, drop_mask=self.variable_length)
+        if value.ndim > 2 and not self.return_sequences:
+            value = flatten(value, drop_mask=self.mask_zero)
 
         value = dense_layers(
             value,
@@ -315,8 +371,8 @@ class SequenceInput(Serializable):
         return value
 
     def _build_highway(self, value):
-        if value.ndim > 2:
-            value = flatten(value, drop_mask=self.variable_length)
+        if value.ndim > 2 and not self.return_sequences:
+            value = flatten(value, drop_mask=self.mask_zero)
         if self.n_highway_layers:
             value = highway_layers(
                 value,
@@ -337,13 +393,15 @@ class SequenceInput(Serializable):
         return input_object, value
 
     def encode(self, peptides):
-        if self.encoding == "index":
-            return self.encoder.encode_index_array(
-                peptides,
-                max_peptide_length=self.length)
-        else:
-            return self.encoder.encode_onehot(
-                peptides, max_peptide_length=self.length)
+        if self.encoding == "embedding":
+            fn = self.encoder.encode_index_array
+        elif self.encoding == "onehot":
+            fn = self.encoder.encode_onehot
+        elif self.encoding == "pmbec":
+            fn = self.encoder.encode_pmbec
+        elif self.encoding == "blosum":
+            fn = self.encoder.encode_blosum
+        return fn(peptides, max_peptide_length=self.length)
 
     @classmethod
     def from_dict(cls, config_dict):

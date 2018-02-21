@@ -1,5 +1,3 @@
-# Copyright (c) 2017. Mount Sinai School of Medicine
-#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -16,11 +14,16 @@ import numpy as np
 from collections import OrderedDict
 
 from typechecks import require_instance
+from serializable import Serializable
+from pepdata.amino_acid_alphabet import (
+    amino_acid_letter_indices,
+    canonical_amino_acids
+)
+from pepdata.pmbec import pmbec_matrix
+from pepdata.blosum import blosum62_matrix
 
-from .amino_acids import amino_acids_dict
 
-
-class Encoder(object):
+class Encoder(Serializable):
     """
     Container for mapping between amino acid letter codes and their full names
     and providing index/hotshot encodings of amino acid sequences.
@@ -30,10 +33,12 @@ class Encoder(object):
     """
     def __init__(
             self,
-            amino_acid_alphabet=amino_acids_dict,
+            amino_acid_alphabet=canonical_amino_acids,
             variable_length_sequences=True,
             add_start_tokens=False,
-            add_stop_tokens=False):
+            add_stop_tokens=False,
+            add_normalized_position=False,
+            add_normalized_centrality=False):
         """
         Parameters
         ----------
@@ -49,6 +54,16 @@ class Encoder(object):
 
         add_stop_tokens : bool
             End each peptide string with "$"
+
+        add_normalized_position : bool
+            Extend the representation of each residue with where it is in
+            the sequence from left-to-right (scaled to be between 0 and 1)
+
+        add_normalized_centrality : bool
+            Extend the representation of each residue with how close it is
+            to the center. 0 represents left and right edges of the sequence,
+            1.0 represents the center.
+
         """
         self._tokens_to_names = OrderedDict()
         self._index_dict = {}
@@ -57,6 +72,8 @@ class Encoder(object):
         self.variable_length_sequences = variable_length_sequences
         self.add_start_tokens = add_start_tokens
         self.add_stop_tokens = add_stop_tokens
+        self.add_normalized_position = add_normalized_position
+        self.add_normalized_centrality = add_normalized_centrality
 
         if self.variable_length_sequences:
             self._add_token("-", "Gap")
@@ -67,8 +84,8 @@ class Encoder(object):
         if self.add_stop_tokens:
             self._add_token("$", "Stop")
 
-        for (k, v) in amino_acid_alphabet.items():
-            self._add_token(k, v)
+        for aa in amino_acid_alphabet:
+            self._add_token(aa.letter, aa.full_name)
 
     def _add_token(self, token, name):
         assert len(token) == 1, "Invalid token '%s'" % (token,)
@@ -144,7 +161,7 @@ class Encoder(object):
             if max_observed_length > max_peptide_length:
                 example = [p for p in peptides if len(p) == max_observed_length][0]
                 raise ValueError(
-                    "Can't have peptide(s) of length %d and max_peptide_length = %d (example '%s')" % (
+                    "Peptide(s) of length %d when max = %d (example '%s')" % (
                         max_observed_length,
                         max_peptide_length,
                         example))
@@ -184,6 +201,8 @@ class Encoder(object):
         Encode a set of equal length peptides as a matrix of their
         amino acid indices.
         """
+        assert not self.add_normalized_centrality
+        assert not self.add_normalized_position
         peptides, max_peptide_length = self._validate_and_prepare_peptides(
             peptides, max_peptide_length)
         n_peptides = len(peptides)
@@ -195,6 +214,66 @@ class Encoder(object):
                 # OK to only loop until the end of the given sequence
                 X_index[i, j] = index_dict[amino_acid]
         return X_index
+
+    def _add_extra_features(self, X, peptides):
+        if not self.add_normalized_position and not self.add_normalized_centrality:
+            return X
+        lengths = np.array([len(p) for p in peptides])
+        n = len(X)
+        max_length = lengths.max()
+
+        X_centrality = np.zeros((n, max_length), dtype="float32")
+        X_position = np.zeros((n, max_length), dtype="float32")
+        for i, l in enumerate(lengths):
+            center = (l - 1) / 2
+            vec = np.arange(l)
+            X_centrality[i, :l] = np.abs(vec - center) / center
+            X_position[i, :] = vec / l
+        extra_arrays = []
+        if self.add_normalized_centrality:
+            extra_arrays.append(X_centrality)
+        if self.add_normalized_position:
+            extra_arrays.append(X_position)
+        return np.dstack([X] + extra_arrays)
+
+    def _encode_from_pairwise_properties(
+            self, peptides, max_peptide_length, property_matrix):
+        peptides, max_peptide_length = self._validate_and_prepare_peptides(
+            peptides, max_peptide_length)
+        n_peptides = len(peptides)
+        shape = (n_peptides, max_peptide_length, 20)
+        X = np.zeros(shape, dtype="float32")
+        aa_to_feature_row = {}
+        alphabet_indices = [
+            amino_acid_letter_indices[aa.letter]
+            for aa in self.amino_acid_alphabet
+        ]
+        for aa in self.amino_acid_alphabet:
+            aa_idx = amino_acid_letter_indices[aa.letter]
+            row = property_matrix[aa_idx, :]
+            row = row[alphabet_indices]
+            aa_to_feature_row[aa.letter] = row
+
+        # add zero vectors for gap, start and stop tokens
+        for token in ["-", "^", "$"]:
+            aa_to_feature_row[token] = np.zeros(
+                len(alphabet_indices), dtype="float32")
+        for i, peptide in enumerate(peptides):
+            for j, amino_acid in enumerate(peptide):
+                X[i, j, :] = aa_to_feature_row[amino_acid]
+        return self._add_extra_features(X, peptides)
+
+    def encode_pmbec(self, peptides, max_peptide_length=None):
+        return self._encode_from_pairwise_properties(
+            peptides=peptides,
+            max_peptide_length=max_peptide_length,
+            property_matrix=pmbec_matrix)
+
+    def encode_blosum(self, peptides, max_peptide_length=None):
+        return self._encode_from_pairwise_properties(
+            peptides=peptides,
+            max_peptide_length=max_peptide_length,
+            property_matrix=blosum62_matrix)
 
     def encode_onehot(
             self,
@@ -213,7 +292,7 @@ class Encoder(object):
         for i, peptide in enumerate(peptides):
             for j, amino_acid in enumerate(peptide):
                 X[i, j, index_dict[amino_acid]] = 1
-        return X
+        return self._add_extra_features(X, peptides)
 
     def encode_FOFE(self, peptides, alpha=0.7, bidirectional=False):
         """
