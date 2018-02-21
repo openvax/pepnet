@@ -1,4 +1,12 @@
-[![Build Status](https://travis-ci.org/hammerlab/pepnet.svg?branch=master)](https://travis-ci.org/hammerlab/pepnet)
+<a href="https://travis-ci.org/openvax/pepnet">
+    <img src="https://travis-ci.org/openvax/pepnet.svg?branch=master" alt="Build Status" />
+</a>
+<a href="https://coveralls.io/github/openvax/pepnet?branch=master">
+    <img src="https://coveralls.io/repos/openvax/pepnet/badge.svg?branch=master&service=github" alt="Coverage Status" />
+</a>
+<a href="https://pypi.python.org/pypi/pepnet/">
+    <img src="https://img.shields.io/pypi/v/pepnet.svg?maxAge=1000" alt="PyPI" />
+</a>
 
 # pepnet
 Neural networks for amino acid sequences
@@ -26,10 +34,10 @@ y_pred = predictor.predict({"x1": sequences, "x2": vectors})["y"]
 
 ## Convolutional sequence filtering
 
-This model takes an amino acid sequence (of up to length 50) and applies to it two layers of 9mer convolution with 3x maxpooling and 2x downsampling in between. The second layer's activations are then pooled across all sequence positions (using both mean and max pooling) and passed to a single dense output node called "y". 
+This model takes an amino acid sequence (of up to length 50) and applies to it two layers of 9mer convolution with 3x maxpooling and 2x downsampling in between. The second layer's activations are then pooled across all sequence positions (using both mean and max pooling) and passed to a single dense output node called "y".
 
 ```python
-peptide = 
+peptide =
 predictor = Predictor(
     inputs=[SequenceInput(
         length=50, name="peptide", encoding="index", variable_length=True,
