@@ -1,4 +1,4 @@
-# Copyright (c) 2017. Mount Sinai School of Medicine
+# Copyright (c) 2017-2018. Mount Sinai School of Medicine
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,15 +23,16 @@ readme_filename = os.path.join(readme_dir, 'README.md')
 
 try:
     with open(readme_filename, 'r') as f:
-        readme = f.read()
+        readme_markdown = f.read()
 except:
     logging.warn("Failed to load %s" % readme_filename)
-    readme = ""
+    readme_markdown = ""
 
 try:
     import pypandoc
-    readme = pypandoc.convert(readme, to='rst', format='md')
+    readme_restructured = pypandoc.convert(readme_markdown, to='rst', format='md')
 except:
+    readme_restructured = readme_markdown
     logging.warn("Conversion of long_description from MD to RST failed")
     pass
 
@@ -69,5 +70,5 @@ if __name__ == '__main__':
             'serializable',
             'ujson'
         ],
-        long_description=readme,
+        long_description=readme_restructured,
     )
